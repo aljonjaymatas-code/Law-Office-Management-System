@@ -611,7 +611,13 @@
             }
           };
 
+          const isDocumentDeclined = (doc) => ['declined', 'rejected'].includes(String(doc.review_status || '').toLowerCase());
+
           const handlePrintDocument = (doc) => {
+            if (isDocumentDeclined(doc)) {
+              window.alert('This document was declined by the attorney and cannot be printed.');
+              return;
+            }
             const fileUrl = doc.file_url || doc.file_data_url;
             if (!fileUrl) return;
             const printWindow = window.open(fileUrl, '_blank');
@@ -1096,14 +1102,29 @@
                                 ) : <span className="text-xs text-slate-500">Not submitted for review</span>}
                               </td>
                               <td className="p-4 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => handlePrintDocument(doc)}
-                                  disabled={!doc.file_url && !doc.file_data_url}
-                                  className={`inline-flex items-center gap-1 rounded-lg bg-amber-500/10 px-3 py-1.5 text-xs font-semibold shadow-sm transition ${doc.file_url || doc.file_data_url ? 'text-amber-300 hover:bg-amber-500 hover:text-slate-950' : 'cursor-not-allowed text-slate-500'}`}
-                                >
-                                  <i data-lucide="printer" className="h-3.5 w-3.5"></i> Print
-                                </button>
+                                {isDocumentDeclined(doc) ? (
+                                  <div className="flex flex-col items-end gap-2">
+                                    <span role="alert" className="text-xs font-medium text-red-300">Printing unavailable: this document was declined.</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePrintDocument(doc)}
+                                      disabled
+                                      title="This document was declined and cannot be printed."
+                                      className="inline-flex cursor-not-allowed items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-500"
+                                    >
+                                      <i data-lucide="printer" className="h-3.5 w-3.5"></i> Print
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePrintDocument(doc)}
+                                    disabled={!doc.file_url && !doc.file_data_url}
+                                    className={`inline-flex items-center gap-1 rounded-lg bg-amber-500/10 px-3 py-1.5 text-xs font-semibold shadow-sm transition ${doc.file_url || doc.file_data_url ? 'text-amber-300 hover:bg-amber-500 hover:text-slate-950' : 'cursor-not-allowed text-slate-500'}`}
+                                  >
+                                    <i data-lucide="printer" className="h-3.5 w-3.5"></i> Print
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           ))}
