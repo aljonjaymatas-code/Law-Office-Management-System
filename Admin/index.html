@@ -27,6 +27,38 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
         const DOCUMENT_REVIEW_KEY = 'law-office-document-review';
+        const APPOINTMENTS_KEY = 'law-office-appointment-workflow';
+        const NOTIFICATIONS_KEY = 'law-office-notifications';
+        const TIME_ENTRIES_KEY = 'law-office-time-entries';
+
+        function readNotifications() {
+          const savedNotifications = window.localStorage.getItem(NOTIFICATIONS_KEY);
+          if (!savedNotifications) return [];
+          try {
+            const notifications = JSON.parse(savedNotifications);
+            return Array.isArray(notifications) ? notifications : [];
+          } catch (error) {
+            console.error('Unable to read portal notifications from browser storage.', error);
+            return [];
+          }
+        }
+
+        function readAppointmentRecords() {
+          const savedAppointments = window.localStorage.getItem(APPOINTMENTS_KEY);
+          if (!savedAppointments) {
+            return [
+              { appointment_id: 'seed-1', title: 'Case Consultation', client: 'Jane Doe', appointment_date: '2026-04-10 10:00 AM', type: 'Consultation', status: 'Confirmed — Master Calendar Updated' },
+              { appointment_id: 'seed-2', title: 'Court Hearing Prep', client: 'Acme Corporation', appointment_date: '2026-04-12 02:00 PM', type: 'Hearing', status: 'Confirmed — Master Calendar Updated' }
+            ];
+          }
+          try {
+            const appointments = JSON.parse(savedAppointments);
+            return Array.isArray(appointments) ? appointments : [];
+          } catch (error) {
+            console.error('Unable to read appointment workflow records from browser storage.', error);
+            return [];
+          }
+        }
 
         function readDocumentSubmissions() {
           const savedDocuments = window.localStorage.getItem(DOCUMENT_REVIEW_KEY);
@@ -36,6 +68,27 @@
             return Array.isArray(documents) ? documents : [];
           } catch (error) {
             console.error('Unable to read document submissions from browser storage.', error);
+            return [];
+          }
+        }
+
+        function getLocalDateString(date = new Date()) {
+          return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        }
+
+        function readTimeEntries() {
+          try {
+            const savedEntries = window.localStorage.getItem(TIME_ENTRIES_KEY);
+            if (!savedEntries) {
+              return [
+                { time_entry_id: 1, case_title: 'Doe vs. Enterprise', hours: 3.5, description: 'Drafting initial complaint and reviewing discovery files.', date_logged: '2026-04-10' },
+                { time_entry_id: 2, case_title: 'Acme Breach of Contract', hours: 2.0, description: 'Client consultation and contract clause analysis.', date_logged: '2026-04-11' }
+              ];
+            }
+            const entries = JSON.parse(savedEntries);
+            return Array.isArray(entries) ? entries : [];
+          } catch (error) {
+            console.error('Unable to read billable time entries from browser storage.', error);
             return [];
           }
         }
@@ -52,6 +105,17 @@
           const [declineMode, setDeclineMode] = useState(false);
           const [declineComment, setDeclineComment] = useState('');
           const [declineError, setDeclineError] = useState('');
+          const [appointmentRequests, setAppointmentRequests] = useState(readAppointmentRecords);
+          const [selectedAppointmentId, setSelectedAppointmentId] = useState(null);
+          const [appointmentAvailabilityDate, setAppointmentAvailabilityDate] = useState('');
+          const [appointmentAvailabilityTime, setAppointmentAvailabilityTime] = useState('');
+          const [appointmentDecisionComment, setAppointmentDecisionComment] = useState('');
+          const [appointmentDecisionError, setAppointmentDecisionError] = useState('');
+          const [notifications, setNotifications] = useState(readNotifications);
+          const [notificationsOpen, setNotificationsOpen] = useState(false);
+          const [timeEntries, setTimeEntries] = useState(readTimeEntries);
+          const [timeEntryModalOpen, setTimeEntryModalOpen] = useState(false);
+          const [timeEntryError, setTimeEntryError] = useState('');
 
           const [emailInput, setEmailInput] = useState('m.vance@lawoffice.com');
           const [passwordInput, setPasswordInput] = useState('securepass123');
@@ -78,10 +142,23 @@
             { appointment_id: 1, title: 'Motions Hearing', case_title: 'Doe vs. Enterprise', appointment_date: '2026-04-22 09:30 AM', type: 'Hearing', status: 'Scheduled' },
             { appointment_id: 2, title: 'Deposition Preparation', case_title: 'Acme Breach of Contract', appointment_date: '2026-04-25 01:00 PM', type: 'Consultation', status: 'Scheduled' }
           ];
-
-          const timeEntries = [
-            { time_entry_id: 1, case_title: 'Doe vs. Enterprise', hours: 3.5, description: 'Drafting initial complaint and reviewing discovery files.', date_logged: '2026-04-10' },
-            { time_entry_id: 2, case_title: 'Acme Breach of Contract', hours: 2.0, description: 'Client consultation and contract clause analysis.', date_logged: '2026-04-11' }
+          const masterCalendarAppointments = [
+            ...courtSchedules.map((schedule) => ({
+              id: `court-${schedule.appointment_id}`,
+              title: schedule.title,
+              case_title: schedule.case_title,
+              appointment_date: schedule.appointment_date,
+              type: schedule.type
+            })),
+            ...appointmentRequests
+              .filter((appointment) => appointment.status === 'Confirmed — Master Calendar Updated')
+              .map((appointment) => ({
+                id: `workflow-${appointment.appointment_id}`,
+                title: appointment.title,
+                case_title: appointment.case_title || appointment.client,
+                appointment_date: appointment.appointment_date,
+                type: appointment.type
+              }))
           ];
 
           const transactionHistory = [
@@ -115,6 +192,14 @@
               details: `${doc.case_title} ${doc.upload_date} ${doc.review_status} ${doc.uploaded_by}`,
               role: 'admin',
               tab: 'document-review'
+            })),
+            ...appointmentRequests.map((appointment) => ({
+              id: `appointment-request-${appointment.appointment_id}`,
+              type: 'Appointment Review',
+              title: appointment.title,
+              details: `${appointment.client} ${appointment.case_title || ''} ${appointment.appointment_date} ${appointment.status}`,
+              role: 'lawyer',
+              tab: 'schedule'
             })),
             ...assignedCases.map((legalCase) => ({
               id: `case-${legalCase.case_id}`,
@@ -155,7 +240,7 @@
             if (window.lucide) {
               window.lucide.createIcons();
             }
-          }, [authStatus, userRole, activeTab, menuOpen, reviewDocuments]);
+          }, [authStatus, userRole, activeTab, menuOpen, reviewDocuments, appointmentRequests, notificationsOpen, notifications, timeEntryModalOpen, timeEntries]);
 
           useEffect(() => {
             const syncDocumentSubmissions = (event) => {
@@ -166,6 +251,54 @@
             window.addEventListener('storage', syncDocumentSubmissions);
             return () => window.removeEventListener('storage', syncDocumentSubmissions);
           }, []);
+
+          useEffect(() => {
+            const syncAppointments = (event) => {
+              if (event.key !== APPOINTMENTS_KEY) return;
+              setAppointmentRequests(readAppointmentRecords());
+            };
+            window.addEventListener('storage', syncAppointments);
+            return () => window.removeEventListener('storage', syncAppointments);
+          }, []);
+
+          useEffect(() => {
+            const syncNotifications = (event) => {
+              if (event.key !== NOTIFICATIONS_KEY) return;
+              setNotifications(readNotifications());
+            };
+            window.addEventListener('storage', syncNotifications);
+            return () => window.removeEventListener('storage', syncNotifications);
+          }, []);
+
+          useEffect(() => {
+            const syncTimeEntries = (event) => {
+              if (event.key !== TIME_ENTRIES_KEY) return;
+              setTimeEntries(readTimeEntries());
+            };
+            window.addEventListener('storage', syncTimeEntries);
+            return () => window.removeEventListener('storage', syncTimeEntries);
+          }, []);
+
+          useEffect(() => {
+            if (!timeEntryModalOpen) return undefined;
+            const closeTimeEntryModalOnEscape = (event) => {
+              if (event.key === 'Escape') {
+                setTimeEntryModalOpen(false);
+                setTimeEntryError('');
+              }
+            };
+            window.addEventListener('keydown', closeTimeEntryModalOnEscape);
+            return () => window.removeEventListener('keydown', closeTimeEntryModalOnEscape);
+          }, [timeEntryModalOpen]);
+
+          useEffect(() => {
+            if (!notificationsOpen) return undefined;
+            const closeNotificationsOnEscape = (event) => {
+              if (event.key === 'Escape') setNotificationsOpen(false);
+            };
+            window.addEventListener('keydown', closeNotificationsOnEscape);
+            return () => window.removeEventListener('keydown', closeNotificationsOnEscape);
+          }, [notificationsOpen]);
 
           useEffect(() => {
             const handleSearchShortcut = (event) => {
@@ -189,6 +322,15 @@
             return () => window.removeEventListener('keydown', handleReviewKeyDown);
           }, [selectedReviewDocumentId]);
 
+          useEffect(() => {
+            if (!selectedAppointmentId) return undefined;
+            const handleAppointmentReviewKeyDown = (event) => {
+              if (event.key === 'Escape') closeAppointmentReview();
+            };
+            window.addEventListener('keydown', handleAppointmentReviewKeyDown);
+            return () => window.removeEventListener('keydown', handleAppointmentReviewKeyDown);
+          }, [selectedAppointmentId]);
+
           const handleLoginSubmit = (e) => {
             e.preventDefault();
             const email = emailInput.toLowerCase();
@@ -204,7 +346,165 @@
 
           const handleLogout = () => {
             setMenuOpen(false);
+            setNotificationsOpen(false);
             setAuthStatus('login');
+          };
+
+          const handleTimeEntrySubmit = (event) => {
+            event.preventDefault();
+            const formData = new FormData(event.currentTarget);
+            const caseTitle = String(formData.get('case_title') || '').trim();
+            const hours = Number(formData.get('hours'));
+            const description = String(formData.get('description') || '').trim();
+            const dateLogged = String(formData.get('date_logged') || '').trim();
+            const todayLocal = getLocalDateString();
+            const parsedDate = new Date(`${dateLogged}T00:00:00`);
+            const validDate = /^\d{4}-\d{2}-\d{2}$/.test(dateLogged)
+              && !Number.isNaN(parsedDate.getTime())
+              && getLocalDateString(parsedDate) === dateLogged
+              && dateLogged <= todayLocal;
+            if (!caseTitle
+              || !Number.isFinite(hours) || hours <= 0 || hours > 24
+              || !description || description.length > 1000 || !validDate) {
+              setTimeEntryError('Enter a case or matter, up to 24 hours, a work description (maximum 1,000 characters), and a valid date that is not in the future.');
+              return;
+            }
+
+            const currentEntries = readTimeEntries();
+            const newEntry = {
+              time_entry_id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              case_title: caseTitle,
+              hours,
+              description,
+              date_logged: dateLogged,
+              logged_by: userRole === 'admin' ? 'Victoria Sterling' : 'Marcus Vance',
+              created_at: new Date().toISOString()
+            };
+            try {
+              const updatedEntries = [newEntry, ...currentEntries];
+              window.localStorage.setItem(TIME_ENTRIES_KEY, JSON.stringify(updatedEntries));
+              setTimeEntries(updatedEntries);
+              setTimeEntryError('');
+              setTimeEntryModalOpen(false);
+            } catch (error) {
+              console.error('Unable to save the billable time entry.', error);
+              setTimeEntryError('Unable to save this time entry in browser storage. Check available storage and try again.');
+            }
+          };
+
+          const addNotification = (notification) => {
+            const currentNotifications = readNotifications();
+            const updatedNotifications = [{
+              notification_id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              ...notification,
+              created_at: new Date().toISOString(),
+              read: false
+            }, ...currentNotifications].slice(0, 100);
+            try {
+              window.localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updatedNotifications));
+              setNotifications(updatedNotifications);
+            } catch (error) {
+              console.error('Unable to save a portal notification.', error);
+              window.alert('The form was saved, but its notification could not be saved. Check browser storage.');
+            }
+          };
+
+          const updateNotifications = (update) => {
+            const updatedNotifications = update(readNotifications());
+            try {
+              window.localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updatedNotifications));
+              setNotifications(updatedNotifications);
+            } catch (error) {
+              console.error('Unable to update portal notifications.', error);
+              window.alert('Unable to update notifications. Check browser storage and try again.');
+            }
+          };
+
+          const markAllNotificationsRead = () => {
+            updateNotifications((current) => current.map((notification) => (
+              notification.audience === 'attorney' ? { ...notification, read: true } : notification
+            )));
+          };
+
+          const openNotification = (notification) => {
+            if (!notification.read) {
+              updateNotifications((current) => current.map((item) => (
+                item.notification_id === notification.notification_id ? { ...item, read: true } : item
+              )));
+            }
+            if (notification.tab) {
+              setUserRole(notification.role || 'lawyer');
+              setActiveTab(notification.tab);
+            }
+            setNotificationsOpen(false);
+          };
+
+          const saveAppointmentDecision = (appointmentId, decision) => {
+            const currentAppointments = readAppointmentRecords();
+            const target = currentAppointments.find((appointment) => appointment.appointment_id === appointmentId);
+            if (!target || target.status !== 'Attorney Review — Submitted') {
+              setAppointmentRequests(currentAppointments);
+              window.alert('This appointment is no longer awaiting review. The queue has been refreshed.');
+              return false;
+            }
+            if (!appointmentAvailabilityDate || !appointmentAvailabilityTime) {
+              setAppointmentDecisionError('Select an available date and time before sending your decision to staff.');
+              return false;
+            }
+            const reviewedAt = new Date().toISOString();
+            const reviewer = userRole === 'admin' ? 'Victoria Sterling' : 'Marcus Vance';
+            const availabilityDateTime = `${appointmentAvailabilityDate} ${appointmentAvailabilityTime}${target.time_zone ? ` (${target.time_zone})` : ''}`;
+            const comment = appointmentDecisionComment.trim();
+            const updatedAppointments = currentAppointments.map((appointment) => (
+              appointment.appointment_id === appointmentId
+                ? {
+                    ...appointment,
+                    status: decision === 'Approve' ? 'Approved — Client Confirmation Needed' : 'Reschedule — Alternatives Needed',
+                    appointment_date: availabilityDateTime,
+                    attorney_availability_date: appointmentAvailabilityDate,
+                    attorney_availability_time: appointmentAvailabilityTime,
+                    attorney_alternatives: decision === 'Reschedule' ? availabilityDateTime : '',
+                    attorney_comment: comment,
+                    reviewed_by: reviewer,
+                    reviewed_at: reviewedAt,
+                    staff_notification_at: reviewedAt,
+                    updated_at: reviewedAt
+                  }
+                : appointment
+            ));
+            try {
+              window.localStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(updatedAppointments));
+              setAppointmentRequests(updatedAppointments);
+              addNotification({
+                audience: 'staff',
+                type: 'appointment-decision',
+                title: decision === 'Approve' ? 'Appointment approved' : 'Alternative appointment proposed',
+                message: `${target.client}: ${availabilityDateTime}${comment ? ` — ${comment}` : ''}`,
+                tab: 'appointments'
+              });
+              closeAppointmentReview();
+              return true;
+            } catch (error) {
+              console.error('Unable to save the attorney appointment decision.', error);
+              window.alert('Unable to save the appointment decision. Check browser storage and try again.');
+              return false;
+            }
+          };
+
+          const openAppointmentReview = (appointment) => {
+            setSelectedAppointmentId(appointment.appointment_id);
+            setAppointmentAvailabilityDate(appointment.requested_date || '');
+            setAppointmentAvailabilityTime(appointment.requested_time || '');
+            setAppointmentDecisionComment('');
+            setAppointmentDecisionError('');
+          };
+
+          const closeAppointmentReview = () => {
+            setSelectedAppointmentId(null);
+            setAppointmentAvailabilityDate('');
+            setAppointmentAvailabilityTime('');
+            setAppointmentDecisionComment('');
+            setAppointmentDecisionError('');
           };
 
           const handleDocumentReview = (documentId, status, comment = '') => {
@@ -233,6 +533,13 @@
             try {
               window.localStorage.setItem(DOCUMENT_REVIEW_KEY, JSON.stringify(updatedSubmissions));
               setReviewDocuments(updatedSubmissions);
+              addNotification({
+                audience: 'staff',
+                type: 'document-review',
+                title: `Document ${status.toLowerCase()}`,
+                message: `${updatedDocument.document_name} — ${updatedDocument.case_title}${reviewComment ? `: ${reviewComment}` : ''}`,
+                tab: 'documents'
+              });
               setSelectedReviewDocumentId(null);
               setDeclineMode(false);
               setDeclineComment('');
@@ -360,7 +667,8 @@
                     </div>
                   </div>
                 </div>
-                <div className="relative z-20 w-full min-w-0 md:ml-auto md:w-[min(34rem,42vw)]">
+                <div className="relative z-20 flex w-full min-w-0 items-center gap-3 md:ml-auto md:w-[min(38rem,48vw)]">
+                  <div className="relative min-w-0 flex-1">
                   <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 shadow-lg transition focus-within:border-amber-500/60 focus-within:ring-1 focus-within:ring-amber-500/30">
                     <i data-lucide="search" className="h-5 w-5 shrink-0 text-amber-400"></i>
                     <input
@@ -398,6 +706,44 @@
                       )) : <p className="px-3 py-4 text-sm text-slate-400">No matching records found.</p>}
                     </div>
                   )}
+                  </div>
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      aria-label={`Notifications${notifications.filter((notification) => notification.audience === 'attorney' && !notification.read).length ? `, ${notifications.filter((notification) => notification.audience === 'attorney' && !notification.read).length} unread` : ''}`}
+                      aria-expanded={notificationsOpen}
+                      aria-controls="admin-notifications-panel"
+                      onClick={() => setNotificationsOpen((open) => !open)}
+                      className="relative inline-flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-950/80 text-amber-400 shadow-lg transition hover:border-amber-500/60 hover:bg-slate-900"
+                    >
+                      <i data-lucide="bell" className="h-5 w-5"></i>
+                      {notifications.filter((notification) => notification.audience === 'attorney' && !notification.read).length > 0 && (
+                        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-slate-900 bg-red-500 px-1 text-[10px] font-bold text-white">
+                          {notifications.filter((notification) => notification.audience === 'attorney' && !notification.read).length}
+                        </span>
+                      )}
+                    </button>
+                    {notificationsOpen && (
+                      <div id="admin-notifications-panel" className="absolute right-0 top-full mt-2 w-[min(22rem,90vw)] overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+                          <h2 className="text-sm font-semibold text-white">Notifications</h2>
+                          <button type="button" onClick={markAllNotificationsRead} className="text-xs font-medium text-amber-300 hover:text-amber-200">Mark all read</button>
+                        </div>
+                        <div className="max-h-80 overflow-y-auto">
+                          {notifications.filter((notification) => notification.audience === 'attorney').length ? notifications.filter((notification) => notification.audience === 'attorney').map((notification) => (
+                            <button key={notification.notification_id} type="button" onClick={() => openNotification(notification)} className={`block w-full border-b border-slate-800 px-4 py-3 text-left transition hover:bg-slate-800/70 ${notification.read ? 'opacity-70' : 'bg-amber-500/5'}`}>
+                              <span className="flex items-start justify-between gap-3">
+                                <span className="text-sm font-semibold text-white">{notification.title}</span>
+                                {!notification.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-400"></span>}
+                              </span>
+                              <span className="mt-1 block text-xs text-slate-300">{notification.message}</span>
+                              <span className="mt-1 block text-[10px] text-slate-500">{new Date(notification.created_at).toLocaleString()}</span>
+                            </button>
+                          )) : <p className="px-4 py-6 text-center text-sm text-slate-400">No notifications yet.</p>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </header>
 
@@ -855,40 +1201,146 @@
                 )}
 
                 {userRole === 'lawyer' && activeTab === 'schedule' && (
-                  <section className="bg-slate-900/80 border border-amber-500/20 rounded-2xl overflow-hidden shadow-xl animate-fade-in">
-                    <div className="p-5 border-b border-slate-800">
-                      <h3 className="font-bold text-white text-base">Court Calendar & Hearings (appointments)</h3>
-                    </div>
-                    <table className="w-full text-left text-sm text-slate-300">
-                      <thead className="bg-slate-950/60 text-amber-400/80 uppercase text-xs">
-                        <tr><th className="p-4">Event</th><th className="p-4">Case</th><th className="p-4">Date & Time</th><th className="p-4">Type</th></tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/60">
-                        {courtSchedules.filter(matchesSearch).map(s => (
-                          <tr key={s.appointment_id} className="hover:bg-slate-800/40">
-                            <td className="p-4 font-semibold text-white">{s.title}</td>
-                            <td className="p-4">{s.case_title}</td>
-                            <td className="p-4 text-slate-300">{s.appointment_date}</td>
-                            <td className="p-4 text-amber-400">{s.type}</td>
-                          </tr>
-                        ))}
-                        {courtSchedules.filter(matchesSearch).length === 0 && (
-                          <tr><td colSpan="4" className="p-6 text-center text-slate-400">No matching court dates.</td></tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </section>
+                  <div className="space-y-6">
+                    <section className="bg-slate-900/80 border border-amber-500/20 rounded-2xl overflow-hidden shadow-xl animate-fade-in">
+                      <div className="border-b border-slate-800 p-5">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <h3 className="font-bold text-white text-base">Appointment Availability Review</h3>
+                            <p className="mt-1 text-sm text-slate-400">Review staff-submitted requests. Approve a slot or return workable alternatives; the staff portal receives the decision through the shared appointment queue.</p>
+                          </div>
+                          <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
+                            {appointmentRequests.filter((appointment) => appointment.status === 'Attorney Review — Submitted').length} awaiting review
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-500">This demo syncs through browser local storage for pages opened under the same origin. It does not send email or external notifications.</p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[1000px] text-left text-sm text-slate-300">
+                          <thead className="bg-slate-950/60 text-amber-400/80 uppercase text-xs">
+                            <tr><th className="p-4">Client / Matter</th><th className="p-4">Proposed appointment</th><th className="p-4">Duration / Location</th><th className="p-4">Staff notes</th><th className="p-4">Decision</th></tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/60">
+                            {appointmentRequests.filter((appointment) => appointment.status === 'Attorney Review — Submitted' && matchesSearch({
+                              client: appointment.client,
+                              case_title: appointment.case_title,
+                              title: appointment.title,
+                              appointment_date: appointment.appointment_date,
+                              type: appointment.type,
+                              status: appointment.status
+                            })).map((appointment) => (
+                              <tr key={appointment.appointment_id} className="align-top hover:bg-slate-800/40">
+                                <td className="p-4">
+                                  <span className="block font-semibold text-white">{appointment.client}</span>
+                                  <span className="mt-1 block text-xs text-slate-400">{appointment.case_title || 'Matter not specified'} · {appointment.title}</span>
+                                </td>
+                                <td className="p-4">
+                                  <span className="block text-white">{appointment.appointment_date}</span>
+                                  <span className="mt-1 block text-xs text-amber-300">{appointment.type}</span>
+                                  <span className="mt-1 block text-xs text-slate-500">Submitted {appointment.submitted_at ? new Date(appointment.submitted_at).toLocaleString() : '—'} by {appointment.created_by || 'staff'}</span>
+                                </td>
+                                <td className="p-4 text-xs text-slate-300">{appointment.duration || '—'}<span className="mt-1 block text-slate-400">{appointment.location || 'Location not specified'}</span><span className="mt-1 block text-slate-400">{appointment.attendees || 'Attendees not specified'}</span></td>
+                                <td className="max-w-xs whitespace-pre-wrap p-4 text-xs text-slate-400">{appointment.notes || '—'}</td>
+                                <td className="p-4">
+                                  <button type="button" onClick={() => openAppointmentReview(appointment)} className="whitespace-nowrap rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-500 hover:text-slate-950">View Pending Appointment</button>
+                                </td>
+                              </tr>
+                            ))}
+                            {appointmentRequests.filter((appointment) => appointment.status === 'Attorney Review — Submitted' && matchesSearch({
+                              client: appointment.client,
+                              case_title: appointment.case_title,
+                              title: appointment.title,
+                              appointment_date: appointment.appointment_date,
+                              type: appointment.type,
+                              status: appointment.status
+                            })).length === 0 && <tr><td colSpan="5" className="p-6 text-center text-slate-400">No appointment requests are awaiting attorney review.</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    <section className="bg-slate-900/80 border border-amber-500/20 rounded-2xl overflow-hidden shadow-xl animate-fade-in">
+                      <div className="border-b border-slate-800 p-5">
+                        <h3 className="font-bold text-white text-base">Internal Master Calendar</h3>
+                        <p className="mt-1 text-sm text-slate-400">Confirmed workflow appointments are added here only after attorney approval and staff-recorded client confirmation.</p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[700px] text-left text-sm text-slate-300">
+                          <thead className="bg-slate-950/60 text-amber-400/80 uppercase text-xs">
+                            <tr><th className="p-4">Event</th><th className="p-4">Case / Client</th><th className="p-4">Date & Time</th><th className="p-4">Type</th></tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/60">
+                            {masterCalendarAppointments.filter(matchesSearch).map((appointment) => (
+                              <tr key={appointment.id} className="hover:bg-slate-800/40">
+                                <td className="p-4 font-semibold text-white">{appointment.title}</td>
+                                <td className="p-4">{appointment.case_title}</td>
+                                <td className="p-4 text-slate-300">{appointment.appointment_date}</td>
+                                <td className="p-4 text-amber-400">{appointment.type}</td>
+                              </tr>
+                            ))}
+                            {masterCalendarAppointments.filter(matchesSearch).length === 0 && <tr><td colSpan="4" className="p-6 text-center text-slate-400">No matching calendar events.</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    {selectedAppointmentId && (() => {
+                      const appointment = appointmentRequests.find((item) => item.appointment_id === selectedAppointmentId);
+                      if (!appointment) return null;
+                      return (
+                        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) closeAppointmentReview(); }}>
+                          <section role="dialog" aria-modal="true" aria-labelledby="appointment-review-title" className="my-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-amber-500/30 bg-slate-900 shadow-2xl">
+                            <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+                              <div>
+                                <h2 id="appointment-review-title" className="text-xl font-bold text-white">Pending Appointment</h2>
+                                <p className="mt-1 text-sm text-slate-400">{appointment.client} · {appointment.title}</p>
+                              </div>
+                              <button type="button" onClick={closeAppointmentReview} aria-label="Close appointment review" className="rounded-lg px-2 py-1 text-2xl leading-none text-slate-400 transition hover:bg-slate-800 hover:text-white">&times;</button>
+                            </div>
+                            <div className="space-y-5 px-6 py-5">
+                              <div className="rounded-xl border border-slate-700 bg-slate-950/70 p-4 text-sm">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-amber-400">Staff proposed</p>
+                                <p className="mt-2 text-white">{appointment.appointment_date}</p>
+                                <p className="mt-1 text-slate-400">{appointment.type} · {appointment.duration || 'Duration not specified'}</p>
+                                {appointment.case_title && <p className="mt-1 text-slate-400">Matter: {appointment.case_title}</p>}
+                                {appointment.notes && <p className="mt-2 whitespace-pre-wrap text-slate-300">{appointment.notes}</p>}
+                              </div>
+                              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div>
+                                  <label htmlFor="attorney-availability-date" className="mb-1 block text-sm font-medium text-slate-200">Available date <span className="text-amber-400">*</span></label>
+                                  <input id="attorney-availability-date" type="date" required value={appointmentAvailabilityDate} onChange={(event) => { setAppointmentAvailabilityDate(event.target.value); setAppointmentDecisionError(''); }} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
+                                </div>
+                                <div>
+                                  <label htmlFor="attorney-availability-time" className="mb-1 block text-sm font-medium text-slate-200">Available time <span className="text-amber-400">*</span></label>
+                                  <input id="attorney-availability-time" type="time" required value={appointmentAvailabilityTime} onChange={(event) => { setAppointmentAvailabilityTime(event.target.value); setAppointmentDecisionError(''); }} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
+                                </div>
+                              </div>
+                              <div>
+                                <label htmlFor="attorney-appointment-comment" className="mb-1 block text-sm font-medium text-slate-200">Comment for staff</label>
+                                <textarea id="attorney-appointment-comment" rows="3" value={appointmentDecisionComment} onChange={(event) => { setAppointmentDecisionComment(event.target.value); setAppointmentDecisionError(''); }} placeholder="Add instructions, constraints, or context for the staff assistant." className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-amber-500"></textarea>
+                              </div>
+                              {appointmentDecisionError && <p role="alert" className="text-sm text-red-300">{appointmentDecisionError}</p>}
+                              <div className="flex flex-col-reverse gap-3 border-t border-slate-800 pt-4 sm:flex-row sm:justify-end">
+                                <button type="button" onClick={() => saveAppointmentDecision(appointment.appointment_id, 'Reschedule')} className="rounded-lg bg-orange-500/10 px-4 py-2.5 text-sm font-semibold text-orange-300 transition hover:bg-orange-500 hover:text-slate-950">Return Alternative to Staff</button>
+                                <button type="button" onClick={() => saveAppointmentDecision(appointment.appointment_id, 'Approve')} className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400">Send to Staff</button>
+                              </div>
+                            </div>
+                          </section>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 )}
 
                 {userRole === 'lawyer' && activeTab === 'hours' && (
                   <section className="bg-slate-900/80 border border-amber-500/20 rounded-2xl overflow-hidden shadow-xl animate-fade-in">
                     <div className="p-5 border-b border-slate-800 flex justify-between items-center">
                       <h3 className="font-bold text-white text-base">Billable Hours Log (time_entries)</h3>
-                      <button onClick={() => alert('Opening Time Entry Form')} className="bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 font-semibold px-4 py-2 rounded-xl text-xs gold-glow-sm">Log Billable Hours</button>
+                      <button type="button" onClick={() => { setTimeEntryError(''); setTimeEntryModalOpen(true); }} className="bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 font-semibold px-4 py-2 rounded-xl text-xs gold-glow-sm">Log Billable Hours</button>
                     </div>
                     <table className="w-full text-left text-sm text-slate-300">
                       <thead className="bg-slate-950/60 text-amber-400/80 uppercase text-xs">
-                        <tr><th className="p-4">Case</th><th className="p-4">Hours</th><th className="p-4">Notes</th><th className="p-4">Date</th></tr>
+                        <tr><th className="p-4">Case</th><th className="p-4">Hours</th><th className="p-4">Notes</th><th className="p-4">Date</th><th className="p-4">Logged By</th></tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60">
                         {timeEntries.filter(matchesSearch).map(t => (
@@ -897,10 +1349,11 @@
                             <td className="p-4 font-mono text-amber-300 font-bold">{t.hours} hrs</td>
                             <td className="p-4 text-xs text-slate-300">{t.description}</td>
                             <td className="p-4 text-slate-400">{t.date_logged}</td>
+                            <td className="p-4 text-slate-400">{t.logged_by || 'Existing entry'}</td>
                           </tr>
                         ))}
                         {timeEntries.filter(matchesSearch).length === 0 && (
-                          <tr><td colSpan="4" className="p-6 text-center text-slate-400">No matching time entries.</td></tr>
+                          <tr><td colSpan="5" className="p-6 text-center text-slate-400">No matching time entries.</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -908,6 +1361,53 @@
                 )}
 
               </main>
+
+              {timeEntryModalOpen && (
+                <div
+                  className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+                  onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) {
+                      setTimeEntryModalOpen(false);
+                      setTimeEntryError('');
+                    }
+                  }}
+                >
+                  <section role="dialog" aria-modal="true" aria-labelledby="time-entry-title" className="my-auto w-full max-w-xl overflow-hidden rounded-2xl border border-amber-500/30 bg-slate-900 shadow-2xl">
+                    <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+                      <div>
+                        <h2 id="time-entry-title" className="text-xl font-bold text-white">Log Billable Hours</h2>
+                        <p className="mt-1 text-sm text-slate-400">Record time worked on a matter.</p>
+                      </div>
+                      <button type="button" onClick={() => { setTimeEntryModalOpen(false); setTimeEntryError(''); }} aria-label="Close billable hours form" className="rounded-lg px-2 py-1 text-2xl leading-none text-slate-400 transition hover:bg-slate-800 hover:text-white">&times;</button>
+                    </div>
+                    <form onSubmit={handleTimeEntrySubmit} className="space-y-4 px-6 py-5">
+                      <div>
+                        <label htmlFor="time-entry-case" className="mb-1 block text-sm font-medium text-slate-200">Case / Matter <span className="text-amber-400">*</span></label>
+                        <input id="time-entry-case" name="case_title" type="text" required maxLength="200" placeholder="Enter a case name or matter" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-amber-500" />
+                      </div>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                          <label htmlFor="time-entry-hours" className="mb-1 block text-sm font-medium text-slate-200">Hours worked <span className="text-amber-400">*</span></label>
+                          <input id="time-entry-hours" name="hours" type="number" required min="0.1" max="24" step="0.1" placeholder="e.g. 1.5" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
+                        </div>
+                        <div>
+                          <label htmlFor="time-entry-date" className="mb-1 block text-sm font-medium text-slate-200">Date worked <span className="text-amber-400">*</span></label>
+                          <input id="time-entry-date" name="date_logged" type="date" required defaultValue={getLocalDateString()} max={getLocalDateString()} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
+                        </div>
+                      </div>
+                      <div>
+                        <label htmlFor="time-entry-description" className="mb-1 block text-sm font-medium text-slate-200">Work description <span className="text-amber-400">*</span></label>
+                        <textarea id="time-entry-description" name="description" required rows="4" maxLength="1000" placeholder="Describe the legal work performed." className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-amber-500"></textarea>
+                      </div>
+                      {timeEntryError && <p role="alert" className="text-sm text-red-300">{timeEntryError}</p>}
+                      <div className="flex justify-end gap-3 border-t border-slate-800 pt-4">
+                        <button type="button" onClick={() => { setTimeEntryModalOpen(false); setTimeEntryError(''); }} className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800">Cancel</button>
+                        <button type="submit" className="rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:from-amber-500 hover:to-amber-400">Save Time Entry</button>
+                      </div>
+                    </form>
+                  </section>
+                </div>
+              )}
             </div>
           );
         }

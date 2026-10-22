@@ -29,6 +29,37 @@
         const { useState, useEffect, useRef } = React;
         const ACCESS_REQUESTS_KEY = 'law-office-document-access-requests';
         const DOCUMENT_REVIEW_KEY = 'law-office-document-review';
+        const APPOINTMENTS_KEY = 'law-office-appointment-workflow';
+        const NOTIFICATIONS_KEY = 'law-office-notifications';
+
+        function readNotifications() {
+          const savedNotifications = window.localStorage.getItem(NOTIFICATIONS_KEY);
+          if (!savedNotifications) return [];
+          try {
+            const notifications = JSON.parse(savedNotifications);
+            return Array.isArray(notifications) ? notifications : [];
+          } catch (error) {
+            console.error('Unable to read portal notifications from browser storage.', error);
+            return [];
+          }
+        }
+
+        function readAppointmentRecords() {
+          const savedAppointments = window.localStorage.getItem(APPOINTMENTS_KEY);
+          if (!savedAppointments) {
+            return [
+              { appointment_id: 'seed-1', title: 'Case Consultation', client: 'Jane Doe', appointment_date: '2026-04-10 10:00 AM', type: 'Consultation', status: 'Confirmed — Master Calendar Updated' },
+              { appointment_id: 'seed-2', title: 'Court Hearing Prep', client: 'Acme Corporation', appointment_date: '2026-04-12 02:00 PM', type: 'Hearing', status: 'Confirmed — Master Calendar Updated' }
+            ];
+          }
+          try {
+            const appointments = JSON.parse(savedAppointments);
+            return Array.isArray(appointments) ? appointments : [];
+          } catch (error) {
+            console.error('Unable to read appointment workflow records from browser storage.', error);
+            return [];
+          }
+        }
 
         function readDocumentSubmissions() {
           const savedDocuments = window.localStorage.getItem(DOCUMENT_REVIEW_KEY);
@@ -60,6 +91,11 @@
           const [activeTab, setActiveTab] = useState('clients');
           const [menuOpen, setMenuOpen] = useState(false);
           const [intakeModalOpen, setIntakeModalOpen] = useState(false);
+          const [appointmentModalOpen, setAppointmentModalOpen] = useState(false);
+          const [appointmentError, setAppointmentError] = useState('');
+          const [alternativeSelections, setAlternativeSelections] = useState({});
+          const [dailySummary, setDailySummary] = useState('');
+          const [dailySummaryMessage, setDailySummaryMessage] = useState('');
           const [uploadModalOpen, setUploadModalOpen] = useState(false);
           const [selectedUploadFile, setSelectedUploadFile] = useState(null);
           const [uploadDocumentTitle, setUploadDocumentTitle] = useState('');
@@ -68,6 +104,8 @@
           const [selectedReviewNote, setSelectedReviewNote] = useState(null);
           const [searchQuery, setSearchQuery] = useState('');
           const searchInputRef = useRef(null);
+          const [notifications, setNotifications] = useState(readNotifications);
+          const [notificationsOpen, setNotificationsOpen] = useState(false);
 
           // Login form inputs
           const [emailInput, setEmailInput] = useState('sarah.staff@lawoffice.com');
@@ -88,10 +126,7 @@
             { client_id: 2, fullname: 'Acme Corporation', email: 'contact@acme.co', phone: '+1 (555) 839-2001', address: '456 Corporate Blvd' }
           ]);
 
-          const [appointments, setAppointments] = useState([
-            { appointment_id: 1, title: 'Case Consultation', client: 'Jane Doe', appointment_date: '2026-04-10 10:00 AM', type: 'Consultation', status: 'Scheduled' },
-            { appointment_id: 2, title: 'Court Hearing Prep', client: 'Acme Corporation', appointment_date: '2026-04-12 02:00 PM', type: 'Hearing', status: 'Scheduled' }
-          ]);
+          const [appointments, setAppointments] = useState(readAppointmentRecords);
 
           const [documents, setDocuments] = useState(() => [
             { document_id: 1, case_title: 'Doe vs. Enterprise', document_name: 'Initial_Complaint_Draft.pdf', upload_date: '2026-03-14' },
@@ -150,7 +185,7 @@
             if (window.lucide) {
               window.lucide.createIcons();
             }
-          }, [authStatus, activeTab, menuOpen, intakeModalOpen, uploadModalOpen, documentAccessRequests, documents]);
+          }, [authStatus, activeTab, menuOpen, intakeModalOpen, appointmentModalOpen, uploadModalOpen, documentAccessRequests, documents, appointments, notificationsOpen, notifications]);
 
           useEffect(() => {
             const syncDocumentRequests = (event) => {
@@ -173,6 +208,33 @@
             window.addEventListener('storage', syncDocumentSubmissions);
             return () => window.removeEventListener('storage', syncDocumentSubmissions);
           }, []);
+
+          useEffect(() => {
+            const syncAppointments = (event) => {
+              if (event.key !== APPOINTMENTS_KEY) return;
+              setAppointments(readAppointmentRecords());
+            };
+            window.addEventListener('storage', syncAppointments);
+            return () => window.removeEventListener('storage', syncAppointments);
+          }, []);
+
+          useEffect(() => {
+            const syncNotifications = (event) => {
+              if (event.key !== NOTIFICATIONS_KEY) return;
+              setNotifications(readNotifications());
+            };
+            window.addEventListener('storage', syncNotifications);
+            return () => window.removeEventListener('storage', syncNotifications);
+          }, []);
+
+          useEffect(() => {
+            if (!notificationsOpen) return undefined;
+            const closeNotificationsOnEscape = (event) => {
+              if (event.key === 'Escape') setNotificationsOpen(false);
+            };
+            window.addEventListener('keydown', closeNotificationsOnEscape);
+            return () => window.removeEventListener('keydown', closeNotificationsOnEscape);
+          }, [notificationsOpen]);
 
           useEffect(() => {
             const handleSearchShortcut = (event) => {
@@ -208,7 +270,227 @@
 
           const handleLogout = () => {
             setMenuOpen(false);
+            setNotificationsOpen(false);
             setAuthStatus('login');
+          };
+
+          const addNotification = (notification) => {
+            const currentNotifications = readNotifications();
+            const updatedNotifications = [{
+              notification_id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              ...notification,
+              created_at: new Date().toISOString(),
+              read: false
+            }, ...currentNotifications].slice(0, 100);
+            try {
+              window.localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updatedNotifications));
+              setNotifications(updatedNotifications);
+            } catch (error) {
+              console.error('Unable to save a portal notification.', error);
+              window.alert('The form was saved, but its notification could not be saved. Check browser storage.');
+            }
+          };
+
+          const updateNotifications = (update) => {
+            const updatedNotifications = update(readNotifications());
+            try {
+              window.localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updatedNotifications));
+              setNotifications(updatedNotifications);
+            } catch (error) {
+              console.error('Unable to update portal notifications.', error);
+              window.alert('Unable to update notifications. Check browser storage and try again.');
+            }
+          };
+
+          const markAllNotificationsRead = () => {
+            updateNotifications((current) => current.map((notification) => (
+              notification.audience === 'staff' ? { ...notification, read: true } : notification
+            )));
+          };
+
+          const openNotification = (notification) => {
+            if (!notification.read) {
+              updateNotifications((current) => current.map((item) => (
+                item.notification_id === notification.notification_id ? { ...item, read: true } : item
+              )));
+            }
+            if (notification.tab) setActiveTab(notification.tab);
+            setNotificationsOpen(false);
+          };
+
+          const saveAppointments = (updatedAppointments, errorMessage) => {
+            try {
+              window.localStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(updatedAppointments));
+              setAppointments(updatedAppointments);
+              return true;
+            } catch (error) {
+              console.error(errorMessage, error);
+              window.alert('Unable to save appointment changes in browser storage. Check available storage and try again.');
+              return false;
+            }
+          };
+
+          const handleAppointmentDraft = (event) => {
+            event.preventDefault();
+            const formData = new FormData(event.currentTarget);
+            const readText = (name) => String(formData.get(name) || '').trim();
+            const title = readText('appointment_title');
+            const client = readText('appointment_client');
+            const date = readText('appointment_date');
+            const time = readText('appointment_time');
+            const type = readText('appointment_type');
+            const duration = readText('appointment_duration');
+            const timeZone = readText('appointment_timezone');
+            if (!title || !client || !date || !time || !type || !duration || !timeZone) {
+              setAppointmentError('Complete all required appointment details before saving the draft.');
+              return;
+            }
+
+            const currentAppointments = readAppointmentRecords();
+            const now = new Date().toISOString();
+            const draft = {
+              appointment_id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              title,
+              client,
+              case_title: readText('appointment_case'),
+              appointment_date: `${date} ${time} (${timeZone})`,
+              requested_date: date,
+              requested_time: time,
+              time_zone: timeZone,
+              duration,
+              type,
+              location: readText('appointment_location'),
+              attendees: readText('appointment_attendees'),
+              notes: readText('appointment_notes'),
+              status: 'Draft — Pending Attorney Review',
+              created_by: staffProfile.fullname,
+              created_at: now,
+              updated_at: now
+            };
+            if (saveAppointments([...currentAppointments, draft], 'Unable to save the appointment draft.')) {
+              setAppointmentError('');
+              setAppointmentModalOpen(false);
+            }
+          };
+
+          const submitAppointmentForReview = (appointmentId) => {
+            const currentAppointments = readAppointmentRecords();
+            const updatedAppointments = currentAppointments.map((appointment) => (
+              appointment.appointment_id === appointmentId && appointment.status === 'Draft — Pending Attorney Review'
+                ? {
+                    ...appointment,
+                    status: 'Attorney Review — Submitted',
+                    submitted_at: new Date().toISOString(),
+                    last_notified_at: new Date().toISOString(),
+                    notification_channel: 'Internal appointment review queue',
+                    updated_at: new Date().toISOString()
+                  }
+                : appointment
+            ));
+            const submittedAppointment = updatedAppointments.find((appointment) => appointment.appointment_id === appointmentId);
+            if (saveAppointments(updatedAppointments, 'Unable to submit the appointment for attorney review.') && submittedAppointment?.status === 'Attorney Review — Submitted') {
+              addNotification({
+                audience: 'attorney',
+                type: 'appointment-review',
+                title: 'Appointment submitted for review',
+                message: `${submittedAppointment.client}: ${submittedAppointment.title} — ${submittedAppointment.appointment_date}`,
+                tab: 'schedule',
+                role: 'lawyer'
+              });
+            }
+          };
+
+          const submitAlternativeForReview = (appointment) => {
+            const selectedSlot = alternativeSelections[appointment.appointment_id] || {};
+            if (!selectedSlot.date || !selectedSlot.time) {
+              window.alert('Enter the date and time selected by the client before resubmitting.');
+              return;
+            }
+            const selectedDateTime = `${selectedSlot.date} ${selectedSlot.time}${appointment.time_zone ? ` (${appointment.time_zone})` : ''}`;
+            const currentAppointments = readAppointmentRecords();
+            const updatedAppointments = currentAppointments.map((record) => (
+              record.appointment_id === appointment.appointment_id
+                ? {
+                    ...record,
+                    appointment_date: selectedDateTime,
+                    requested_date: selectedSlot.date,
+                    requested_time: selectedSlot.time,
+                    client_selected_alternative: selectedDateTime,
+                    attorney_alternatives: '',
+                    status: 'Attorney Review — Submitted',
+                    submitted_at: new Date().toISOString(),
+                    last_notified_at: new Date().toISOString(),
+                    notification_channel: 'Internal appointment review queue',
+                    updated_at: new Date().toISOString()
+                  }
+                : record
+            ));
+            if (saveAppointments(updatedAppointments, 'Unable to resubmit the selected appointment time.')) {
+              addNotification({
+                audience: 'attorney',
+                type: 'appointment-review',
+                title: 'Alternative appointment submitted for review',
+                message: `${appointment.client}: ${appointment.title} — ${selectedDateTime}`,
+                tab: 'schedule',
+                role: 'lawyer'
+              });
+              setAlternativeSelections((previous) => ({ ...previous, [appointment.appointment_id]: { date: '', time: '' } }));
+            }
+          };
+
+          const confirmClientAppointment = (appointmentId) => {
+            const currentAppointments = readAppointmentRecords();
+            const updatedAppointments = currentAppointments.map((appointment) => (
+              appointment.appointment_id === appointmentId && appointment.status === 'Approved — Client Confirmation Needed'
+                ? {
+                    ...appointment,
+                    status: 'Confirmed — Master Calendar Updated',
+                    client_confirmed_at: new Date().toISOString(),
+                    master_calendar_updated_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                  }
+                : appointment
+            ));
+            saveAppointments(updatedAppointments, 'Unable to update the confirmed appointment.');
+          };
+
+          const createDailySummaryText = () => {
+            const actionable = appointments.filter((appointment) => [
+              'Draft — Pending Attorney Review',
+              'Attorney Review — Submitted',
+              'Reschedule — Alternatives Needed'
+            ].includes(appointment.status));
+            const summaryDate = new Date().toLocaleDateString();
+            const lines = [
+              `Scheduling approvals needed — ${summaryDate}`,
+              '',
+              ...actionable.map((appointment, index) => [
+                `${index + 1}. ${appointment.client}${appointment.case_title ? ` / ${appointment.case_title}` : ''}`,
+                `   Proposed: ${appointment.appointment_date} | ${appointment.title} (${appointment.duration || 'duration not specified'})`,
+                `   Status: ${appointment.status}`,
+                `   Action: ${appointment.status === 'Reschedule — Alternatives Needed' ? 'Please provide/confirm workable alternative dates and times.' : 'Please approve or provide alternative dates and times.'}`
+              ].join('\n'))
+            ];
+            if (!actionable.length) lines.push('No appointment requests are awaiting attorney action.');
+            lines.push('', `Prepared by: ${staffProfile.fullname}`);
+            return lines.join('\n');
+          };
+
+          const buildDailySummary = () => {
+            setDailySummary(createDailySummaryText());
+            setDailySummaryMessage('');
+          };
+
+          const copyDailySummary = async () => {
+            const summary = createDailySummaryText();
+            setDailySummary(summary);
+            try {
+              await navigator.clipboard.writeText(summary);
+              setDailySummaryMessage('Summary copied. Send it through the firm-approved channel.');
+            } catch (error) {
+              console.error('Unable to copy the daily appointment summary.', error);
+              setDailySummaryMessage('Copy is unavailable in this browser. Select and copy the summary text manually.');
+            }
           };
 
           const handleAccessRequestDecision = (requestId, status) => {
@@ -253,6 +535,14 @@
                 worked_before: readText('worked_before')
               }
             ]);
+            addNotification({
+              audience: 'attorney',
+              type: 'client-intake',
+              title: 'New client intake submitted',
+              message: `${firstName} ${lastName} — ${readText('service_category') || 'Service category not specified'}`,
+              tab: 'users',
+              role: 'admin'
+            });
             setIntakeModalOpen(false);
           };
 
@@ -303,6 +593,14 @@
               const updatedSubmissions = [...submissions, reviewDocument];
               window.localStorage.setItem(DOCUMENT_REVIEW_KEY, JSON.stringify(updatedSubmissions));
               setDocuments((currentDocuments) => [...currentDocuments, reviewDocument]);
+              addNotification({
+                audience: 'attorney',
+                type: 'document-submission',
+                title: 'Document submitted for review',
+                message: `${reviewDocument.document_name} — ${reviewDocument.case_title}`,
+                tab: 'document-review',
+                role: 'lawyer'
+              });
               setSelectedUploadFile(null);
               setUploadDocumentTitle('');
               setUploadError('');
@@ -414,7 +712,8 @@
                   </div>
                 </div>
 
-                <div className="relative z-20 w-full min-w-0 md:ml-auto md:w-[min(34rem,42vw)]">
+                <div className="relative z-20 flex w-full min-w-0 items-center gap-3 md:ml-auto md:w-[min(38rem,48vw)]">
+                  <div className="relative min-w-0 flex-1">
                   <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 shadow-lg transition focus-within:border-amber-500/60 focus-within:ring-1 focus-within:ring-amber-500/30">
                     <i data-lucide="search" className="h-5 w-5 shrink-0 text-amber-400"></i>
                     <input
@@ -452,6 +751,44 @@
                       )) : <p className="px-3 py-4 text-sm text-slate-400">No matching records found.</p>}
                     </div>
                   )}
+                  </div>
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      aria-label={`Notifications${notifications.filter((notification) => notification.audience === 'staff' && !notification.read).length ? `, ${notifications.filter((notification) => notification.audience === 'staff' && !notification.read).length} unread` : ''}`}
+                      aria-expanded={notificationsOpen}
+                      aria-controls="staff-notifications-panel"
+                      onClick={() => setNotificationsOpen((open) => !open)}
+                      className="relative inline-flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-950/80 text-amber-400 shadow-lg transition hover:border-amber-500/60 hover:bg-slate-900"
+                    >
+                      <i data-lucide="bell" className="h-5 w-5"></i>
+                      {notifications.filter((notification) => notification.audience === 'staff' && !notification.read).length > 0 && (
+                        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-slate-900 bg-red-500 px-1 text-[10px] font-bold text-white">
+                          {notifications.filter((notification) => notification.audience === 'staff' && !notification.read).length}
+                        </span>
+                      )}
+                    </button>
+                    {notificationsOpen && (
+                      <div id="staff-notifications-panel" className="absolute right-0 top-full mt-2 w-[min(22rem,90vw)] overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+                          <h2 className="text-sm font-semibold text-white">Notifications</h2>
+                          <button type="button" onClick={markAllNotificationsRead} className="text-xs font-medium text-amber-300 hover:text-amber-200">Mark all read</button>
+                        </div>
+                        <div className="max-h-80 overflow-y-auto">
+                          {notifications.filter((notification) => notification.audience === 'staff').length ? notifications.filter((notification) => notification.audience === 'staff').map((notification) => (
+                            <button key={notification.notification_id} type="button" onClick={() => openNotification(notification)} className={`block w-full border-b border-slate-800 px-4 py-3 text-left transition hover:bg-slate-800/70 ${notification.read ? 'opacity-70' : 'bg-amber-500/5'}`}>
+                              <span className="flex items-start justify-between gap-3">
+                                <span className="text-sm font-semibold text-white">{notification.title}</span>
+                                {!notification.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-400"></span>}
+                              </span>
+                              <span className="mt-1 block text-xs text-slate-300">{notification.message}</span>
+                              <span className="mt-1 block text-[10px] text-slate-500">{new Date(notification.created_at).toLocaleString()}</span>
+                            </button>
+                          )) : <p className="px-4 py-6 text-center text-sm text-slate-400">No notifications yet.</p>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
               </header>
@@ -627,12 +964,12 @@
                         <i data-lucide="calendar" className="w-5 h-5 text-amber-400"></i>
                         <h3 className="font-bold text-white text-base tracking-wide">Appointment & Hearing Scheduling</h3>
                       </div>
-                      <button onClick={() => alert('Open Schedule Appointment Form')} className="bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-semibold px-4 py-2 rounded-xl text-xs transition gold-glow-sm flex items-center gap-1.5">
+                      <button type="button" onClick={() => { setAppointmentError(''); setAppointmentModalOpen(true); }} className="bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-semibold px-4 py-2 rounded-xl text-xs transition gold-glow-sm flex items-center gap-1.5">
                         <i data-lucide="plus" className="w-4 h-4"></i> Schedule Appointment
                       </button>
                     </div>
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left text-sm text-slate-300">
+                      <table className="w-full min-w-[1000px] text-left text-sm text-slate-300">
                         <thead className="bg-slate-950/60 text-amber-400/80 uppercase text-xs tracking-wider">
                           <tr>
                             <th className="p-4">Meeting Title</th>
@@ -640,24 +977,63 @@
                             <th className="p-4">Date & Time</th>
                             <th className="p-4">Type</th>
                             <th className="p-4">Status</th>
+                            <th className="p-4">Staff Action / Attorney Response</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/60">
                           {appointments.filter(matchesSearch).map((app) => (
                             <tr key={app.appointment_id} className="hover:bg-slate-800/40 transition">
-                              <td className="p-4 font-semibold text-white">{app.title}</td>
+                              <td className="p-4 font-semibold text-white">
+                                {app.title}
+                                {app.case_title && <span className="mt-1 block text-xs font-normal text-slate-400">{app.case_title}</span>}
+                                {app.attorney_comment && <span className="mt-1 block text-xs font-normal text-amber-300">{app.attorney_comment}</span>}
+                              </td>
                               <td className="p-4 text-slate-300">{app.client}</td>
-                              <td className="p-4 text-slate-300">{app.appointment_date}</td>
+                              <td className="p-4 text-slate-300">
+                                {app.appointment_date}
+                                {app.attorney_alternatives && <span className="mt-2 block whitespace-pre-line text-xs text-amber-300">Attorney alternatives: {app.attorney_alternatives}</span>}
+                              </td>
                               <td className="p-4"><span className="text-xs text-amber-400">{app.type}</span></td>
                               <td className="p-4">
-                                <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                                <span className={`inline-block rounded-full border px-3 py-1 text-xs font-medium ${
+                                  app.status === 'Confirmed — Master Calendar Updated'
+                                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                                    : app.status === 'Approved — Client Confirmation Needed'
+                                      ? 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+                                      : app.status === 'Reschedule — Alternatives Needed'
+                                        ? 'border-orange-500/30 bg-orange-500/10 text-orange-300'
+                                        : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                                }`}>
                                   {app.status}
                                 </span>
+                              </td>
+                              <td className="p-4">
+                                {app.status === 'Draft — Pending Attorney Review' && (
+                                  <button type="button" onClick={() => submitAppointmentForReview(app.appointment_id)} className="rounded-lg bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300 transition hover:bg-amber-500 hover:text-slate-950">Submit for Attorney Review</button>
+                                )}
+                                {app.status === 'Attorney Review — Submitted' && <span className="text-xs text-slate-400">Submitted {app.submitted_at ? new Date(app.submitted_at).toLocaleString() : ''}. Awaiting attorney decision.</span>}
+                                {app.status === 'Approved — Client Confirmation Needed' && (
+                                  <div className="space-y-2">
+                                    <p className="text-xs text-slate-400">Attorney approved. Contact the client, then confirm here to update the master calendar.</p>
+                                    <button type="button" onClick={() => confirmClientAppointment(app.appointment_id)} className="rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500 hover:text-slate-950">Client Confirmed — Finalize Calendar</button>
+                                  </div>
+                                )}
+                                {app.status === 'Reschedule — Alternatives Needed' && (
+                                  <div className="min-w-56 space-y-2">
+                                    <label className="block text-xs text-slate-400" htmlFor={`alternative-date-${app.appointment_id}`}>Client-selected alternative date and time for attorney recheck</label>
+                                    <input id={`alternative-date-${app.appointment_id}`} type="date" value={(alternativeSelections[app.appointment_id] || {}).date || ''} onChange={(event) => setAlternativeSelections((previous) => ({ ...previous, [app.appointment_id]: { ...(previous[app.appointment_id] || {}), date: event.target.value } }))} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white outline-none focus:border-amber-500" />
+                                    <input aria-label={`Alternative time for ${app.title}`} type="time" value={(alternativeSelections[app.appointment_id] || {}).time || ''} onChange={(event) => setAlternativeSelections((previous) => ({ ...previous, [app.appointment_id]: { ...(previous[app.appointment_id] || {}), time: event.target.value } }))} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white outline-none focus:border-amber-500" />
+                                    <button type="button" onClick={() => submitAlternativeForReview(app)} className="rounded-lg bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300 transition hover:bg-amber-500 hover:text-slate-950">Resubmit for Attorney Review</button>
+                                  </div>
+                                )}
+                                {app.status === 'Confirmed — Master Calendar Updated' && (
+                                  <span className="text-xs text-emerald-300">Client confirmation and internal calendar update recorded.</span>
+                                )}
                               </td>
                             </tr>
                           ))}
                           {appointments.filter(matchesSearch).length === 0 && (
-                            <tr><td colSpan="5" className="p-6 text-center text-slate-400">No matching appointments.</td></tr>
+                            <tr><td colSpan="6" className="p-6 text-center text-slate-400">No matching appointments.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -867,6 +1243,92 @@
                 )}
 
               </main>
+
+              {appointmentModalOpen && (
+                <div
+                  className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+                  onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) {
+                      setAppointmentModalOpen(false);
+                      setAppointmentError('');
+                    }
+                  }}
+                >
+                  <section role="dialog" aria-modal="true" aria-labelledby="appointment-modal-title" className="my-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-amber-500/30 bg-slate-900 shadow-2xl">
+                    <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+                      <div>
+                        <h2 id="appointment-modal-title" className="text-xl font-bold text-white">Create Pending Appointment Draft</h2>
+                        <p className="mt-1 text-xs text-slate-400">This draft is not booked until the attorney approves it and the client confirms.</p>
+                      </div>
+                      <button type="button" onClick={() => { setAppointmentModalOpen(false); setAppointmentError(''); }} aria-label="Close appointment form" className="rounded-lg px-2 py-1 text-2xl leading-none text-slate-400 transition hover:bg-slate-800 hover:text-white">&times;</button>
+                    </div>
+                    <form onSubmit={handleAppointmentDraft} className="max-h-[75vh] space-y-4 overflow-y-auto px-6 py-5">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                          <label htmlFor="appointment-title" className="mb-1 block text-sm font-medium text-slate-200">Appointment title <span className="text-amber-400">*</span></label>
+                          <input id="appointment-title" name="appointment_title" required placeholder="e.g. Case consultation" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
+                        </div>
+                        <div>
+                          <label htmlFor="appointment-client" className="mb-1 block text-sm font-medium text-slate-200">Client <span className="text-amber-400">*</span></label>
+                          <select id="appointment-client" name="appointment_client" required defaultValue="" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500">
+                            <option value="" disabled>Select a client</option>
+                            {clients.map((client) => <option key={client.client_id} value={client.fullname}>{client.fullname}</option>)}
+                            <option value="Other client">Other client — specify in notes</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="appointment-case" className="mb-1 block text-sm font-medium text-slate-200">Matter / case</label>
+                          <input id="appointment-case" name="appointment_case" placeholder="Matter name or reference" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
+                        </div>
+                        <div>
+                          <label htmlFor="appointment-type" className="mb-1 block text-sm font-medium text-slate-200">Appointment type <span className="text-amber-400">*</span></label>
+                          <select id="appointment-type" name="appointment_type" required defaultValue="" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500">
+                            <option value="" disabled>Select type</option>
+                            <option>Consultation</option>
+                            <option>Hearing</option>
+                            <option>Deposition</option>
+                            <option>Client Meeting</option>
+                            <option>Other</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="appointment-date" className="mb-1 block text-sm font-medium text-slate-200">Proposed date <span className="text-amber-400">*</span></label>
+                          <input id="appointment-date" name="appointment_date" type="date" required min={todayDate} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
+                        </div>
+                        <div>
+                          <label htmlFor="appointment-time" className="mb-1 block text-sm font-medium text-slate-200">Start time <span className="text-amber-400">*</span></label>
+                          <input id="appointment-time" name="appointment_time" type="time" required className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
+                        </div>
+                        <div>
+                          <label htmlFor="appointment-duration" className="mb-1 block text-sm font-medium text-slate-200">Expected duration <span className="text-amber-400">*</span></label>
+                          <input id="appointment-duration" name="appointment_duration" required placeholder="e.g. 60 minutes" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
+                        </div>
+                        <div>
+                          <label htmlFor="appointment-timezone" className="mb-1 block text-sm font-medium text-slate-200">Time zone <span className="text-amber-400">*</span></label>
+                          <input id="appointment-timezone" name="appointment_timezone" required defaultValue={Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local time'} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
+                        </div>
+                        <div>
+                          <label htmlFor="appointment-location" className="mb-1 block text-sm font-medium text-slate-200">Location / meeting format</label>
+                          <input id="appointment-location" name="appointment_location" placeholder="Office, phone, or video" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
+                        </div>
+                        <div>
+                          <label htmlFor="appointment-attendees" className="mb-1 block text-sm font-medium text-slate-200">Required attendees</label>
+                          <input id="appointment-attendees" name="appointment_attendees" placeholder="Attorney, client, other attendees" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
+                        </div>
+                      </div>
+                      <div>
+                        <label htmlFor="appointment-notes" className="mb-1 block text-sm font-medium text-slate-200">Scheduling constraints / preparation notes</label>
+                        <textarea id="appointment-notes" name="appointment_notes" rows="3" placeholder="Include essential scheduling context only." className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500"></textarea>
+                      </div>
+                      {appointmentError && <p role="alert" className="text-sm text-red-300">{appointmentError}</p>}
+                      <div className="flex justify-end gap-3 border-t border-slate-800 pt-4">
+                        <button type="button" onClick={() => { setAppointmentModalOpen(false); setAppointmentError(''); }} className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800">Cancel</button>
+                        <button type="submit" className="rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:from-amber-500 hover:to-amber-400">Save Pending Draft</button>
+                      </div>
+                    </form>
+                  </section>
+                </div>
+              )}
 
               {uploadModalOpen && (
                 <div
