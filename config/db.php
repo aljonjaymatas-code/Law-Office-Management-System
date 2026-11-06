@@ -2,7 +2,7 @@
 // config/db.php
 
 $host = 'localhost';
-$db_name = 'loms';
+$db_name = 'loms_v2';
 $username = 'root'; // Change if you have a custom MySQL/MariaDB username
 $password = '';     // Change if you have a password set in XAMPP/MariaDB
 
