@@ -131,27 +131,28 @@ $documentsStatement = $pdo->query(
 );
 $documents = $documentsStatement->fetchAll();
 
-staff_layout_start('Case Document Uploading', $user, 'documents.php', staff_take_flash(), $error);
+staff_layout_start('Case Document Uploading', $user, 'documents.php', staff_take_flash(), $error, 'Upload Document', 'document-upload-form');
 ?>
-<section class="<?php echo staff_panel_class(); ?>">
-    <?php if ($cases === []): ?>
-        <?php staff_panel_heading('Upload a Case Document'); ?>
-        <p class="p-5 text-sm text-slate-400">A case must exist before a document can be uploaded.</p>
-    <?php else: ?>
-        <details class="group" <?php echo $error !== '' ? 'open' : ''; ?>>
-            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 p-5 [&::-webkit-details-marker]:hidden">
-                <span>
-                    <span class="block font-bold tracking-wide text-white">Upload a Case Document</span>
-                    <span class="mt-1 block text-sm text-slate-400">Open the form to upload a file to a case.</span>
-                </span>
-                <span class="inline-flex shrink-0 items-center gap-2 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:from-amber-500 hover:to-amber-400">
-                    <i data-lucide="plus" class="h-4 w-4 group-open:hidden"></i>
-                    <i data-lucide="minus" class="hidden h-4 w-4 group-open:block"></i>
-                    <span class="group-open:hidden">Upload Document</span>
-                    <span class="hidden group-open:inline">Close Form</span>
-                </span>
-            </summary>
-            <form method="post" action="documents.php" enctype="multipart/form-data" class="grid grid-cols-1 gap-4 border-t border-slate-800 p-5 md:grid-cols-2">
+<dialog id="document-upload-form" data-floating-form data-open-on-load="<?php echo $error !== '' ? 'true' : 'false'; ?>" aria-labelledby="document-upload-title" class="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto rounded-2xl border border-amber-500/30 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/75 backdrop:backdrop-blur-sm">
+    <section class="<?php echo staff_panel_class(); ?>">
+        <div class="flex items-start justify-between gap-4 border-b border-slate-800 p-5">
+            <div>
+                <h2 id="document-upload-title" class="text-xl font-bold text-white">Upload a Case Document</h2>
+                <p class="mt-1 text-sm text-slate-400">Upload a file to a case.</p>
+            </div>
+            <button type="button" data-dialog-close aria-label="Close document upload form" class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white">
+                <i data-lucide="x" class="h-5 w-5"></i>
+            </button>
+        </div>
+        <?php if ($cases === []): ?>
+            <div class="p-5">
+                <p class="text-sm text-slate-300">A case must exist before a document can be uploaded.</p>
+                <a href="cases.php" class="mt-3 inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:from-amber-500 hover:to-amber-400">
+                    <i data-lucide="briefcase-business" class="h-4 w-4"></i><span>Create Case</span>
+                </a>
+            </div>
+        <?php else: ?>
+            <form method="post" action="documents.php" enctype="multipart/form-data" class="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
             <?php staff_csrf_field(); ?>
             <div>
                 <label for="case_id" class="mb-1 block text-sm font-medium text-slate-200">Case <span class="text-amber-400">*</span></label>
@@ -177,9 +178,9 @@ staff_layout_start('Case Document Uploading', $user, 'documents.php', staff_take
                 <button type="submit" class="rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:from-amber-500 hover:to-amber-400">Upload Document</button>
             </div>
             </form>
-        </details>
-    <?php endif; ?>
-</section>
+        <?php endif; ?>
+    </section>
+</dialog>
 
 <section class="<?php echo staff_panel_class(); ?>">
     <?php staff_panel_heading('Documents from the LOMS database'); ?>

@@ -51,11 +51,20 @@ $intakeRecordsStatement = $pdo->query(
 );
 $intakeRecords = $intakeRecordsStatement->fetchAll();
 
-staff_layout_start('Client Registration & Intake Management', $user, 'clients.php', staff_take_flash(), $error);
+staff_layout_start('Client Registration & Intake Management', $user, 'clients.php', staff_take_flash(), $error, 'New Client', 'client-intake-form');
 ?>
-<section class="<?php echo staff_panel_class(); ?>">
-    <?php staff_panel_heading('New Client Intake'); ?>~~
-    <form method="post" action="clients.php" class="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
+<dialog id="client-intake-form" data-floating-form data-open-on-load="<?php echo $error !== '' ? 'true' : 'false'; ?>" aria-labelledby="client-intake-title" class="m-auto w-[calc(100%-2rem)] max-w-2xl rounded-2xl border border-amber-500/30 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/75 backdrop:backdrop-blur-sm">
+    <section class="<?php echo staff_panel_class(); ?>">
+        <div class="flex items-start justify-between gap-4 border-b border-slate-800 p-5">
+            <div>
+                <h2 id="client-intake-title" class="text-xl font-bold text-white">New Client Intake</h2>
+                <p class="mt-1 text-sm text-slate-400">Add a new client or intake record.</p>
+            </div>
+            <button type="button" data-dialog-close aria-label="Close new client form" class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white">
+                <i data-lucide="x" class="h-5 w-5"></i>
+            </button>
+        </div>
+        <form method="post" action="clients.php" class="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
         <?php staff_csrf_field(); ?>
         <div>
             <label for="fullname" class="mb-1 block text-sm font-medium text-slate-200">Full Name / Company <span class="text-amber-400">*</span></label>
@@ -76,8 +85,9 @@ staff_layout_start('Client Registration & Intake Management', $user, 'clients.ph
         <div class="md:col-span-2">
             <button type="submit" class="rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:from-amber-500 hover:to-amber-400">Save Client</button>
         </div>
-    </form>
-</section>
+        </form>
+    </section>
+</dialog>
 
 <section class="<?php echo staff_panel_class(); ?>">
     <?php staff_panel_heading('Registered Client Accounts'); ?>

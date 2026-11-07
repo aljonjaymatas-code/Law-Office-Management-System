@@ -2,8 +2,6 @@ window.AdminPortalStorage = (() => {
   const DOCUMENT_REVIEW_KEY = 'law-office-document-review';
   const APPOINTMENTS_KEY = 'law-office-appointment-workflow';
   const NOTIFICATIONS_KEY = 'law-office-notifications';
-  const TIME_ENTRIES_KEY = 'law-office-time-entries';
-
   function readNotifications() {
     const savedNotifications = window.localStorage.getItem(NOTIFICATIONS_KEY);
     if (!savedNotifications) return [];
@@ -49,21 +47,5 @@ window.AdminPortalStorage = (() => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }
 
-  function readTimeEntries() {
-    try {
-      const savedEntries = window.localStorage.getItem(TIME_ENTRIES_KEY);
-      if (!savedEntries) {
-        return [
-          { time_entry_id: 1, case_title: 'Doe vs. Enterprise', hours: 3.5, description: 'Drafting initial complaint and reviewing discovery files.', date_logged: '2026-04-10' },
-          { time_entry_id: 2, case_title: 'Acme Breach of Contract', hours: 2.0, description: 'Client consultation and contract clause analysis.', date_logged: '2026-04-11' }
-        ];
-      }
-      const entries = JSON.parse(savedEntries);
-      return Array.isArray(entries) ? entries : [];
-    } catch (error) {
-      console.error('Unable to read billable time entries from browser storage.', error);
-      return [];
-    }
-  }
-  return { DOCUMENT_REVIEW_KEY, APPOINTMENTS_KEY, NOTIFICATIONS_KEY, TIME_ENTRIES_KEY, readNotifications, readAppointmentRecords, readDocumentSubmissions, getLocalDateString, readTimeEntries };
+  return { DOCUMENT_REVIEW_KEY, APPOINTMENTS_KEY, NOTIFICATIONS_KEY, readNotifications, readAppointmentRecords, readDocumentSubmissions, getLocalDateString };
 })();

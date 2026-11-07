@@ -1,10 +1,11 @@
 const { useState, useEffect, useRef } = React;
-        const { DOCUMENT_REVIEW_KEY, APPOINTMENTS_KEY, NOTIFICATIONS_KEY, TIME_ENTRIES_KEY, readNotifications, readAppointmentRecords, readDocumentSubmissions, getLocalDateString, readTimeEntries } = window.AdminPortalStorage;
+        const { DOCUMENT_REVIEW_KEY, APPOINTMENTS_KEY, NOTIFICATIONS_KEY, readNotifications, readAppointmentRecords, readDocumentSubmissions, getLocalDateString } = window.AdminPortalStorage;
 const currentUser = window.ADMIN_USER;
 
         function AdminLawyerDashboard() {
           const [userRole, setUserRole] = useState(window.ADMIN_USER_ROLE === 'lawyer' ? 'lawyer' : 'admin');
-          const [activeTab, setActiveTab] = useState(userRole === 'admin' ? 'overview' : 'cases');
+          const requestedTab = new URLSearchParams(window.location.search).get('tab');
+          const [activeTab, setActiveTab] = useState(userRole === 'admin' ? 'overview' : requestedTab === 'schedule' || requestedTab === 'hours' ? requestedTab : 'cases');
           const [menuOpen, setMenuOpen] = useState(false);
           const [searchQuery, setSearchQuery] = useState('');
           const searchInputRef = useRef(null);
@@ -21,45 +22,31 @@ const currentUser = window.ADMIN_USER;
           const [appointmentDecisionError, setAppointmentDecisionError] = useState('');
           const [notifications, setNotifications] = useState(readNotifications);
           const [notificationsOpen, setNotificationsOpen] = useState(false);
-          const [timeEntries, setTimeEntries] = useState(readTimeEntries);
-          const [timeEntryModalOpen, setTimeEntryModalOpen] = useState(false);
-          const [timeEntryError, setTimeEntryError] = useState('');
+          const timeEntries = Array.isArray(window.ADMIN_TIME_ENTRIES) ? window.ADMIN_TIME_ENTRIES : [];
+          const [timeEntryModalOpen, setTimeEntryModalOpen] = useState(Boolean(window.ADMIN_TIME_ENTRY_NOTICE && window.ADMIN_TIME_ENTRY_NOTICE.type === 'error'));
 
           const usersList = Array.isArray(window.ADMIN_USERS) ? window.ADMIN_USERS : [];
           const clientRecords = Array.isArray(window.ADMIN_CLIENT_RECORDS) ? window.ADMIN_CLIENT_RECORDS : [];
           const caseRecords = Array.isArray(window.ADMIN_CASE_RECORDS) ? window.ADMIN_CASE_RECORDS : [];
           const pendingAppointments = Array.isArray(window.ADMIN_PENDING_APPOINTMENTS) ? window.ADMIN_PENDING_APPOINTMENTS : [];
+          const calendarAppointments = Array.isArray(window.ADMIN_CALENDAR_APPOINTMENTS) ? window.ADMIN_CALENDAR_APPOINTMENTS : [];
 
           const firmReporting = {
             totalCases: window.ADMIN_TOTAL_CASES,
             pendingAppointments: window.ADMIN_PENDING_APPOINTMENTS_COUNT,
-            totalBillableHoursYTD: '1,280 hrs',
+            totalBillableHoursYTD: `${Number(window.ADMIN_TOTAL_BILLABLE_HOURS_YTD || 0).toFixed(2)} hrs`,
             totalClients: window.ADMIN_TOTAL_CLIENTS
           };
 
-          const assignedCases = [
-            { case_id: 1, case_number: 'CR-2026-089', title: 'Doe vs. Enterprise', status: 'Active', filed_date: '2026-03-12' },
-            { case_id: 2, case_number: 'CV-2026-104', title: 'Acme Breach of Contract', status: 'Active', filed_date: '2026-03-20' }
-          ];
+          const assignedCases = caseRecords.filter((legalCase) => legalCase.lawyer_name);
 
-          const courtSchedules = [
-            { appointment_id: 1, title: 'Motions Hearing', case_title: 'Doe vs. Enterprise', appointment_date: '2026-04-22 09:30 AM', type: 'Hearing', status: 'Scheduled' },
-            { appointment_id: 2, title: 'Deposition Preparation', case_title: 'Acme Breach of Contract', appointment_date: '2026-04-25 01:00 PM', type: 'Consultation', status: 'Scheduled' }
-          ];
           const masterCalendarAppointments = [
-            ...courtSchedules.map((schedule) => ({
-              id: `court-${schedule.appointment_id}`,
-              title: schedule.title,
-              case_title: schedule.case_title,
-              appointment_date: schedule.appointment_date,
-              type: schedule.type
-            })),
-            ...appointmentRequests
-              .filter((appointment) => appointment.status === 'Confirmed — Master Calendar Updated')
+            ...calendarAppointments
+              .filter((appointment) => appointment.status === 'Confirmed')
               .map((appointment) => ({
-                id: `workflow-${appointment.appointment_id}`,
+                id: `appointment-${appointment.appointment_id}`,
                 title: appointment.title,
-                case_title: appointment.case_title || appointment.client,
+                case_title: appointment.case_title || appointment.client_name || 'No case or client',
                 appointment_date: appointment.appointment_date,
                 type: appointment.type
               }))
@@ -89,14 +76,6 @@ const currentUser = window.ADMIN_USER;
               role: 'admin',
               tab: 'overview'
             })),
-            ...transactionHistory.map((transaction) => ({
-              id: `transaction-${transaction.transaction_id}`,
-              type: 'Transaction',
-              title: `${transaction.transaction_id} - ${transaction.activity}`,
-              details: `${transaction.date} ${transaction.record} ${transaction.performed_by} ${transaction.status}`,
-              role: 'admin',
-              tab: 'transactions'
-            })),
             ...reviewDocuments.map((doc) => ({
               id: `review-document-${doc.document_id}`,
               type: 'Document Review',
@@ -104,14 +83,6 @@ const currentUser = window.ADMIN_USER;
               details: `${doc.case_title} ${doc.upload_date} ${doc.review_status} ${doc.uploaded_by}`,
               role: 'admin',
               tab: 'document-review'
-            })),
-            ...appointmentRequests.map((appointment) => ({
-              id: `appointment-request-${appointment.appointment_id}`,
-              type: 'Appointment Review',
-              title: appointment.title,
-              details: `${appointment.client} ${appointment.case_title || ''} ${appointment.appointment_date} ${appointment.status}`,
-              role: 'lawyer',
-              tab: 'schedule'
             })),
             ...assignedCases.map((legalCase) => ({
               id: `case-${legalCase.case_id}`,
@@ -121,7 +92,7 @@ const currentUser = window.ADMIN_USER;
               role: 'lawyer',
               tab: 'cases'
             })),
-            ...courtSchedules.map((schedule) => ({
+            ...masterCalendarAppointments.map((schedule) => ({
               id: `schedule-${schedule.appointment_id}`,
               type: 'Court date',
               title: schedule.title,
@@ -183,27 +154,6 @@ const currentUser = window.ADMIN_USER;
           }, []);
 
           useEffect(() => {
-            const syncTimeEntries = (event) => {
-              if (event.key !== TIME_ENTRIES_KEY) return;
-              setTimeEntries(readTimeEntries());
-            };
-            window.addEventListener('storage', syncTimeEntries);
-            return () => window.removeEventListener('storage', syncTimeEntries);
-          }, []);
-
-          useEffect(() => {
-            if (!timeEntryModalOpen) return undefined;
-            const closeTimeEntryModalOnEscape = (event) => {
-              if (event.key === 'Escape') {
-                setTimeEntryModalOpen(false);
-                setTimeEntryError('');
-              }
-            };
-            window.addEventListener('keydown', closeTimeEntryModalOnEscape);
-            return () => window.removeEventListener('keydown', closeTimeEntryModalOnEscape);
-          }, [timeEntryModalOpen]);
-
-          useEffect(() => {
             if (!notificationsOpen) return undefined;
             const closeNotificationsOnEscape = (event) => {
               if (event.key === 'Escape') setNotificationsOpen(false);
@@ -211,6 +161,15 @@ const currentUser = window.ADMIN_USER;
             window.addEventListener('keydown', closeNotificationsOnEscape);
             return () => window.removeEventListener('keydown', closeNotificationsOnEscape);
           }, [notificationsOpen]);
+
+          useEffect(() => {
+            if (!timeEntryModalOpen) return undefined;
+            const closeTimeEntryModalOnEscape = (event) => {
+              if (event.key === 'Escape') setTimeEntryModalOpen(false);
+            };
+            window.addEventListener('keydown', closeTimeEntryModalOnEscape);
+            return () => window.removeEventListener('keydown', closeTimeEntryModalOnEscape);
+          }, [timeEntryModalOpen]);
 
           useEffect(() => {
             const handleSearchShortcut = (event) => {
@@ -243,48 +202,6 @@ const currentUser = window.ADMIN_USER;
 
           const handleLogout = () => {
             window.location.href = 'logout.php';
-          };
-
-          const handleTimeEntrySubmit = (event) => {
-            event.preventDefault();
-            const formData = new FormData(event.currentTarget);
-            const caseTitle = String(formData.get('case_title') || '').trim();
-            const hours = Number(formData.get('hours'));
-            const description = String(formData.get('description') || '').trim();
-            const dateLogged = String(formData.get('date_logged') || '').trim();
-            const todayLocal = getLocalDateString();
-            const parsedDate = new Date(`${dateLogged}T00:00:00`);
-            const validDate = /^\d{4}-\d{2}-\d{2}$/.test(dateLogged)
-              && !Number.isNaN(parsedDate.getTime())
-              && getLocalDateString(parsedDate) === dateLogged
-              && dateLogged <= todayLocal;
-            if (!caseTitle
-              || !Number.isFinite(hours) || hours <= 0 || hours > 24
-              || !description || description.length > 1000 || !validDate) {
-              setTimeEntryError('Enter a case or matter, up to 24 hours, a work description (maximum 1,000 characters), and a valid date that is not in the future.');
-              return;
-            }
-
-            const currentEntries = readTimeEntries();
-            const newEntry = {
-              time_entry_id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-              case_title: caseTitle,
-              hours,
-              description,
-              date_logged: dateLogged,
-              logged_by: userRole === 'admin' ? 'Victoria Sterling' : 'Marcus Vance',
-              created_at: new Date().toISOString()
-            };
-            try {
-              const updatedEntries = [newEntry, ...currentEntries];
-              window.localStorage.setItem(TIME_ENTRIES_KEY, JSON.stringify(updatedEntries));
-              setTimeEntries(updatedEntries);
-              setTimeEntryError('');
-              setTimeEntryModalOpen(false);
-            } catch (error) {
-              console.error('Unable to save the billable time entry.', error);
-              setTimeEntryError('Unable to save this time entry in browser storage. Check available storage and try again.');
-            }
           };
 
           const addNotification = (notification) => {
@@ -515,7 +432,7 @@ const currentUser = window.ADMIN_USER;
                       value={searchQuery}
                       onChange={(event) => setSearchQuery(event.target.value)}
                       placeholder="Search clients, cases, documents, case numbers, or dates..."
-                      aria-label="Search cases, court dates, time entries, transactions, and users"
+                      aria-label="Search clients, cases, court dates, documents, time entries, and users"
                       aria-controls="admin-search-results"
                       className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
                     />
@@ -1171,12 +1088,12 @@ const currentUser = window.ADMIN_USER;
                             <tr key={c.case_id} className="hover:bg-slate-800/40">
                               <td className="p-4 font-mono text-amber-300">{c.case_number}</td>
                               <td className="p-4 font-semibold text-white">{c.title}</td>
-                              <td className="p-4"><span className="px-2.5 py-1 rounded-full text-xs bg-emerald-500/10 text-emerald-400">{c.status}</span></td>
+                              <td className="p-4"><span className={`px-2.5 py-1 rounded-full text-xs ${c.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400' : c.status === 'Pending' ? 'bg-amber-500/10 text-amber-300' : 'bg-slate-700/60 text-slate-300'}`}>{c.status}</span></td>
                               <td className="p-4 text-slate-400">{c.filed_date}</td>
                             </tr>
                           ))}
                           {assignedCases.filter(matchesSearch).length === 0 && (
-                            <tr><td colSpan="4" className="p-6 text-center text-slate-400">No matching cases.</td></tr>
+                            <tr><td colSpan="4" className="p-6 text-center text-slate-400">{assignedCases.length === 0 ? 'No assigned legal cases found.' : 'No matching cases.'}</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -1190,54 +1107,57 @@ const currentUser = window.ADMIN_USER;
                       <div className="border-b border-slate-800 p-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <h3 className="font-bold text-white text-base">Appointment Availability Review</h3>
-                            <p className="mt-1 text-sm text-slate-400">Review staff-submitted requests. Approve a slot or return workable alternatives; the staff portal receives the decision through the shared appointment queue.</p>
+                            <h3 className="font-bold text-white text-base">Staff Appointment Requests</h3>
+                            <p className="mt-1 text-sm text-slate-400">Review appointments scheduled by staff, adjust the date or time, and confirm them to add them to the court calendar.</p>
                           </div>
                           <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
-                            {appointmentRequests.filter((appointment) => appointment.status === 'Attorney Review — Submitted').length} awaiting review
+                            {pendingAppointments.length} pending
                           </span>
                         </div>
-                        <p className="mt-2 text-xs text-slate-500">This demo syncs through browser local storage for pages opened under the same origin. It does not send email or external notifications.</p>
                       </div>
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1000px] text-left text-sm text-slate-300">
-                          <thead className="bg-slate-950/60 text-amber-400/80 uppercase text-xs">
-                            <tr><th className="p-4">Client / Matter</th><th className="p-4">Proposed appointment</th><th className="p-4">Duration / Location</th><th className="p-4">Staff notes</th><th className="p-4">Decision</th></tr>
+                        <table className="w-full min-w-[1050px] text-left text-sm text-slate-300">
+                          <thead className="bg-slate-950/60 text-xs uppercase text-amber-400/80">
+                            <tr><th className="p-4">Client / Case</th><th className="p-4">Appointment</th><th className="p-4">Requested By</th><th className="p-4">Proposed Date &amp; Time</th><th className="p-4">Attorney Schedule</th></tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800/60">
-                            {appointmentRequests.filter((appointment) => appointment.status === 'Attorney Review — Submitted' && matchesSearch({
-                              client: appointment.client,
-                              case_title: appointment.case_title,
-                              title: appointment.title,
-                              appointment_date: appointment.appointment_date,
-                              type: appointment.type,
-                              status: appointment.status
-                            })).map((appointment) => (
+                            {pendingAppointments.filter(matchesSearch).map((appointment) => (
                               <tr key={appointment.appointment_id} className="align-top hover:bg-slate-800/40">
                                 <td className="p-4">
-                                  <span className="block font-semibold text-white">{appointment.client}</span>
-                                  <span className="mt-1 block text-xs text-slate-400">{appointment.case_title || 'Matter not specified'} · {appointment.title}</span>
+                                  <span className="block font-semibold text-white">{appointment.client_name || 'No client'}</span>
+                                  <span className="mt-1 block text-xs text-slate-400">{appointment.case_number || 'No case linked'}</span>
                                 </td>
                                 <td className="p-4">
-                                  <span className="block text-white">{appointment.appointment_date}</span>
+                                  <span className="block font-semibold text-white">{appointment.title}</span>
                                   <span className="mt-1 block text-xs text-amber-300">{appointment.type}</span>
-                                  <span className="mt-1 block text-xs text-slate-500">Submitted {appointment.submitted_at ? new Date(appointment.submitted_at).toLocaleString() : '—'} by {appointment.created_by || 'staff'}</span>
                                 </td>
-                                <td className="p-4 text-xs text-slate-300">{appointment.duration || '—'}<span className="mt-1 block text-slate-400">{appointment.location || 'Location not specified'}</span><span className="mt-1 block text-slate-400">{appointment.attendees || 'Attendees not specified'}</span></td>
-                                <td className="max-w-xs whitespace-pre-wrap p-4 text-xs text-slate-400">{appointment.notes || '—'}</td>
                                 <td className="p-4">
-                                  <button type="button" onClick={() => openAppointmentReview(appointment)} className="whitespace-nowrap rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-500 hover:text-slate-950">View Pending Appointment</button>
+                                  {appointment.requested_by}
+                                </td>
+                                <td className="p-4 whitespace-nowrap text-slate-300">
+                                  {String(appointment.appointment_date).replace('T', ' ')}
+                                </td>
+                                <td className="p-4">
+                                  <form method="post" action="index.php?tab=schedule" className="flex items-center gap-2">
+                                    <input type="hidden" name="action" value="confirm_appointment" />
+                                    <input type="hidden" name="appointment_id" value={appointment.appointment_id} />
+                                    <input type="hidden" name="_csrf" value={window.ADMIN_APPOINTMENT_CSRF_TOKEN} />
+                                    <label className="sr-only" htmlFor={`appointment-date-${appointment.appointment_id}`}>Set appointment date and time for {appointment.title}</label>
+                                    <input
+                                      id={`appointment-date-${appointment.appointment_id}`}
+                                      name="appointment_date"
+                                      type="datetime-local"
+                                      required
+                                      min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+                                      defaultValue={String(appointment.appointment_date).replace(' ', 'T').slice(0, 16)}
+                                      className="min-w-[205px] rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-amber-500"
+                                    />
+                                    <button type="submit" className="whitespace-nowrap rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-emerald-400">Confirm Appointment</button>
+                                  </form>
                                 </td>
                               </tr>
                             ))}
-                            {appointmentRequests.filter((appointment) => appointment.status === 'Attorney Review — Submitted' && matchesSearch({
-                              client: appointment.client,
-                              case_title: appointment.case_title,
-                              title: appointment.title,
-                              appointment_date: appointment.appointment_date,
-                              type: appointment.type,
-                              status: appointment.status
-                            })).length === 0 && <tr><td colSpan="5" className="p-6 text-center text-slate-400">No appointment requests are awaiting attorney review.</td></tr>}
+                            {pendingAppointments.filter(matchesSearch).length === 0 && <tr><td colSpan="5" className="p-6 text-center text-slate-400">{pendingAppointments.length === 0 ? 'No staff appointment requests are pending.' : 'No pending appointments match your search.'}</td></tr>}
                           </tbody>
                         </table>
                       </div>
@@ -1245,24 +1165,25 @@ const currentUser = window.ADMIN_USER;
 
                     <section className="bg-slate-900/80 border border-amber-500/20 rounded-2xl overflow-hidden shadow-xl animate-fade-in">
                       <div className="border-b border-slate-800 p-5">
-                        <h3 className="font-bold text-white text-base">Internal Master Calendar</h3>
-                        <p className="mt-1 text-sm text-slate-400">Confirmed workflow appointments are added here only after attorney approval and staff-recorded client confirmation.</p>
+                        <h3 className="font-bold text-white text-base">Confirmed Court Calendar</h3>
+                        <p className="mt-1 text-sm text-slate-400">Appointments confirmed by an attorney from staff requests.</p>
                       </div>
                       <div className="overflow-x-auto">
                         <table className="w-full min-w-[700px] text-left text-sm text-slate-300">
                           <thead className="bg-slate-950/60 text-amber-400/80 uppercase text-xs">
-                            <tr><th className="p-4">Event</th><th className="p-4">Case / Client</th><th className="p-4">Date & Time</th><th className="p-4">Type</th></tr>
+                            <tr><th className="p-4">Appointment</th><th className="p-4">Case / Client</th><th className="p-4">Date &amp; Time</th><th className="p-4">Type</th><th className="p-4">Status</th></tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800/60">
                             {masterCalendarAppointments.filter(matchesSearch).map((appointment) => (
                               <tr key={appointment.id} className="hover:bg-slate-800/40">
                                 <td className="p-4 font-semibold text-white">{appointment.title}</td>
                                 <td className="p-4">{appointment.case_title}</td>
-                                <td className="p-4 text-slate-300">{appointment.appointment_date}</td>
+                                <td className="p-4 whitespace-nowrap text-slate-300">{String(appointment.appointment_date).replace('T', ' ')}</td>
                                 <td className="p-4 text-amber-400">{appointment.type}</td>
+                                <td className="p-4"><span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-400">Confirmed</span></td>
                               </tr>
                             ))}
-                            {masterCalendarAppointments.filter(matchesSearch).length === 0 && <tr><td colSpan="4" className="p-6 text-center text-slate-400">No matching calendar events.</td></tr>}
+                            {masterCalendarAppointments.filter(matchesSearch).length === 0 && <tr><td colSpan="5" className="p-6 text-center text-slate-400">{masterCalendarAppointments.length === 0 ? 'No confirmed appointments are on the calendar.' : 'No confirmed appointments match your search.'}</td></tr>}
                           </tbody>
                         </table>
                       </div>
@@ -1319,28 +1240,41 @@ const currentUser = window.ADMIN_USER;
                 {userRole === 'lawyer' && activeTab === 'hours' && (
                   <section className="bg-slate-900/80 border border-amber-500/20 rounded-2xl overflow-hidden shadow-xl animate-fade-in">
                     <div className="p-5 border-b border-slate-800 flex justify-between items-center">
-                      <h3 className="font-bold text-white text-base">Billable Hours Log (time_entries)</h3>
-                      <button type="button" onClick={() => { setTimeEntryError(''); setTimeEntryModalOpen(true); }} className="bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 font-semibold px-4 py-2 rounded-xl text-xs gold-glow-sm">Log Billable Hours</button>
+                      <div>
+                        <h3 className="font-bold text-white text-base">Billable Hours Log (time_entries)</h3>
+                        <p className="mt-1 text-sm text-slate-400">{timeEntries.length} database entr{timeEntries.length === 1 ? 'y' : 'ies'} · {firmReporting.totalBillableHoursYTD} this year</p>
+                      </div>
+                      <button type="button" onClick={() => setTimeEntryModalOpen(true)} className="bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 font-semibold px-4 py-2 rounded-xl text-xs gold-glow-sm">Log Billable Hours</button>
                     </div>
-                    <table className="w-full text-left text-sm text-slate-300">
-                      <thead className="bg-slate-950/60 text-amber-400/80 uppercase text-xs">
-                        <tr><th className="p-4">Case</th><th className="p-4">Hours</th><th className="p-4">Notes</th><th className="p-4">Date</th><th className="p-4">Logged By</th></tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/60">
-                        {timeEntries.filter(matchesSearch).map(t => (
-                          <tr key={t.time_entry_id} className="hover:bg-slate-800/40">
-                            <td className="p-4 font-semibold text-white">{t.case_title}</td>
-                            <td className="p-4 font-mono text-amber-300 font-bold">{t.hours} hrs</td>
-                            <td className="p-4 text-xs text-slate-300">{t.description}</td>
-                            <td className="p-4 text-slate-400">{t.date_logged}</td>
-                            <td className="p-4 text-slate-400">{t.logged_by || 'Existing entry'}</td>
-                          </tr>
-                        ))}
-                        {timeEntries.filter(matchesSearch).length === 0 && (
-                          <tr><td colSpan="5" className="p-6 text-center text-slate-400">No matching time entries.</td></tr>
-                        )}
-                      </tbody>
-                    </table>
+                    {window.ADMIN_TIME_ENTRY_NOTICE && (
+                      <p role={window.ADMIN_TIME_ENTRY_NOTICE.type === 'error' ? 'alert' : 'status'} className={`mx-5 mt-5 rounded-xl border p-4 text-sm ${window.ADMIN_TIME_ENTRY_NOTICE.type === 'error' ? 'border-red-500/30 bg-red-500/10 text-red-200' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'}`}>
+                        {window.ADMIN_TIME_ENTRY_NOTICE.message}
+                      </p>
+                    )}
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[800px] text-left text-sm text-slate-300">
+                        <thead className="bg-slate-950/60 text-amber-400/80 uppercase text-xs">
+                          <tr><th className="p-4">Case</th><th className="p-4">Hours</th><th className="p-4">Notes</th><th className="p-4">Date</th><th className="p-4">Logged By</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60">
+                          {timeEntries.filter(matchesSearch).map(t => (
+                            <tr key={t.time_entry_id} className="hover:bg-slate-800/40">
+                              <td className="p-4">
+                                <span className="block font-semibold text-white">{t.case_title}</span>
+                                <span className="mt-1 block font-mono text-xs text-amber-300">{t.case_number}</span>
+                              </td>
+                              <td className="p-4 font-mono font-bold text-amber-300">{Number(t.hours).toFixed(2)} hrs</td>
+                              <td className="p-4 text-xs text-slate-300">{t.description || '—'}</td>
+                              <td className="p-4 text-slate-400">{t.date_logged}</td>
+                              <td className="p-4 text-slate-400">{t.logged_by || 'Unknown'}</td>
+                            </tr>
+                          ))}
+                          {timeEntries.filter(matchesSearch).length === 0 && (
+                            <tr><td colSpan="5" className="p-6 text-center text-slate-400">{timeEntries.length === 0 ? 'No billable hours have been logged in the database.' : 'No time entries match your search.'}</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </section>
                 )}
 
@@ -1352,7 +1286,6 @@ const currentUser = window.ADMIN_USER;
                   onMouseDown={(event) => {
                     if (event.target === event.currentTarget) {
                       setTimeEntryModalOpen(false);
-                      setTimeEntryError('');
                     }
                   }}
                 >
@@ -1362,17 +1295,24 @@ const currentUser = window.ADMIN_USER;
                         <h2 id="time-entry-title" className="text-xl font-bold text-white">Log Billable Hours</h2>
                         <p className="mt-1 text-sm text-slate-400">Record time worked on a matter.</p>
                       </div>
-                      <button type="button" onClick={() => { setTimeEntryModalOpen(false); setTimeEntryError(''); }} aria-label="Close billable hours form" className="rounded-lg px-2 py-1 text-2xl leading-none text-slate-400 transition hover:bg-slate-800 hover:text-white">&times;</button>
+                      <button type="button" onClick={() => setTimeEntryModalOpen(false)} aria-label="Close billable hours form" className="rounded-lg px-2 py-1 text-2xl leading-none text-slate-400 transition hover:bg-slate-800 hover:text-white">&times;</button>
                     </div>
-                    <form onSubmit={handleTimeEntrySubmit} className="space-y-4 px-6 py-5">
+                    <form method="post" action="index.php?tab=hours" className="space-y-4 px-6 py-5">
+                      <input type="hidden" name="action" value="create_time_entry" />
+                      <input type="hidden" name="_csrf" value={window.ADMIN_TIME_ENTRY_CSRF_TOKEN} />
                       <div>
                         <label htmlFor="time-entry-case" className="mb-1 block text-sm font-medium text-slate-200">Case / Matter <span className="text-amber-400">*</span></label>
-                        <input id="time-entry-case" name="case_title" type="text" required maxLength="200" placeholder="Enter a case name or matter" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-amber-500" />
+                        <select id="time-entry-case" name="case_id" required defaultValue="" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500">
+                          <option value="" disabled>Select a case</option>
+                          {caseRecords.map((legalCase) => (
+                            <option key={legalCase.case_id} value={legalCase.case_id}>{legalCase.case_number} — {legalCase.title}</option>
+                          ))}
+                        </select>
                       </div>
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                           <label htmlFor="time-entry-hours" className="mb-1 block text-sm font-medium text-slate-200">Hours worked <span className="text-amber-400">*</span></label>
-                          <input id="time-entry-hours" name="hours" type="number" required min="0.1" max="24" step="0.1" placeholder="e.g. 1.5" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
+                          <input id="time-entry-hours" name="hours" type="number" required min="0.01" max="24" step="0.01" placeholder="e.g. 1.5" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500" />
                         </div>
                         <div>
                           <label htmlFor="time-entry-date" className="mb-1 block text-sm font-medium text-slate-200">Date worked <span className="text-amber-400">*</span></label>
@@ -1383,9 +1323,8 @@ const currentUser = window.ADMIN_USER;
                         <label htmlFor="time-entry-description" className="mb-1 block text-sm font-medium text-slate-200">Work description <span className="text-amber-400">*</span></label>
                         <textarea id="time-entry-description" name="description" required rows="4" maxLength="1000" placeholder="Describe the legal work performed." className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-amber-500"></textarea>
                       </div>
-                      {timeEntryError && <p role="alert" className="text-sm text-red-300">{timeEntryError}</p>}
                       <div className="flex justify-end gap-3 border-t border-slate-800 pt-4">
-                        <button type="button" onClick={() => { setTimeEntryModalOpen(false); setTimeEntryError(''); }} className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800">Cancel</button>
+                        <button type="button" onClick={() => setTimeEntryModalOpen(false)} className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800">Cancel</button>
                         <button type="submit" className="rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:from-amber-500 hover:to-amber-400">Save Time Entry</button>
                       </div>
                     </form>

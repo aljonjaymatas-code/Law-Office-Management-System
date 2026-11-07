@@ -125,23 +125,20 @@ $statement = $pdo->query(
 );
 $cases = $statement->fetchAll();
 
-staff_layout_start('Case Management', $user, 'cases.php', staff_take_flash(), $error);
+staff_layout_start('Case Management', $user, 'cases.php', staff_take_flash(), $error, 'Add Case', 'case-intake-form');
 ?>
-<section class="<?php echo staff_panel_class(); ?>">
-    <details class="group" <?php echo $error !== '' ? 'open' : ''; ?>>
-        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 p-5 [&::-webkit-details-marker]:hidden">
-            <span>
-                <span class="block font-bold tracking-wide text-white">Add a Case</span>
-                <span class="mt-1 block text-sm text-slate-400">Open the form to enter a new case record.</span>
-            </span>
-            <span class="inline-flex shrink-0 items-center gap-2 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:from-amber-500 hover:to-amber-400">
-                <i data-lucide="plus" class="h-4 w-4 group-open:hidden"></i>
-                <i data-lucide="minus" class="hidden h-4 w-4 group-open:block"></i>
-                <span class="group-open:hidden">Add Case</span>
-                <span class="hidden group-open:inline">Close Form</span>
-            </span>
-        </summary>
-        <form method="post" action="cases.php" class="grid grid-cols-1 gap-4 border-t border-slate-800 p-5 md:grid-cols-2">
+<dialog id="case-intake-form" data-floating-form data-open-on-load="<?php echo $error !== '' ? 'true' : 'false'; ?>" aria-labelledby="case-intake-title" class="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-2xl border border-amber-500/30 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/75 backdrop:backdrop-blur-sm">
+    <section class="<?php echo staff_panel_class(); ?>">
+        <div class="flex items-start justify-between gap-4 border-b border-slate-800 p-5">
+            <div>
+                <h2 id="case-intake-title" class="text-xl font-bold text-white">Add a Case</h2>
+                <p class="mt-1 text-sm text-slate-400">Enter a new case record.</p>
+            </div>
+            <button type="button" data-dialog-close aria-label="Close case form" class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white">
+                <i data-lucide="x" class="h-5 w-5"></i>
+            </button>
+        </div>
+        <form method="post" action="cases.php" class="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
         <?php staff_csrf_field(); ?>
         <div>
             <label for="case_number" class="mb-1 block text-sm font-medium text-slate-200">Case # <span class="text-amber-400">*</span></label>
@@ -192,8 +189,8 @@ staff_layout_start('Case Management', $user, 'cases.php', staff_take_flash(), $e
             <button type="submit" class="rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:from-amber-500 hover:to-amber-400">Save Case</button>
         </div>
         </form>
-    </details>
-</section>
+    </section>
+</dialog>
 
 <section class="<?php echo staff_panel_class(); ?>">
     <?php staff_panel_heading('Recent Cases'); ?>

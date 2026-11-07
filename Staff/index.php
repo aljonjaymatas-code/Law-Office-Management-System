@@ -6,12 +6,7 @@ $user = staff_require_auth($pdo);
 $success = staff_take_flash();
 
 $summary = [
-    'clients' => (int) $pdo->query(
-        "SELECT COUNT(*)
-         FROM clients c
-         INNER JOIN users u ON u.user_id = c.user_id
-         WHERE LOWER(TRIM(u.role)) = 'client'"
-    )->fetchColumn(),
+    'clients' => (int) $pdo->query('SELECT COUNT(*) FROM clients')->fetchColumn(),
     'cases' => (int) $pdo->query('SELECT COUNT(*) FROM cases')->fetchColumn(),
     'appointments' => (int) $pdo->query(
         "SELECT COUNT(*) FROM appointments WHERE appointment_date >= NOW() AND status NOT IN ('Cancelled', 'Completed')"

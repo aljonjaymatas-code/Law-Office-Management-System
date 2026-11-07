@@ -73,14 +73,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
     }
 
     $_SESSION['admin_appointment_notice'] = $appointmentActionNotice;
-    header('Location: index.php');
+    header('Location: index.php?tab=schedule');
+    exit;
+}
+
+$timeEntryActionNotice = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create_time_entry') {
+    $caseId = filter_var($_POST['case_id'] ?? null, FILTER_VALIDATE_INT);
+    $hours = filter_var($_POST['hours'] ?? null, FILTER_VALIDATE_FLOAT);
+    $description = trim((string) ($_POST['description'] ?? ''));
+    $dateLoggedInput = $_POST['date_logged'] ?? null;
+    $dateLogged = is_string($dateLoggedInput)
+        ? DateTime::createFromFormat('!Y-m-d', $dateLoggedInput)
+        : false;
+    $dateErrors = DateTime::getLastErrors();
+
+    if (
+        !is_string($_POST['_csrf'] ?? null)
+        || !isset($_SESSION['admin_time_entry_csrf_token'])
+        || !hash_equals($_SESSION['admin_time_entry_csrf_token'], $_POST['_csrf'])
+    ) {
+        $timeEntryActionNotice = ['type' => 'error', 'message' => 'Your session has expired. Refresh the page and try again.'];
+    } elseif ($caseId === false || $caseId === null || $caseId < 1) {
+        $timeEntryActionNotice = ['type' => 'error', 'message' => 'Select a valid case for this time entry.'];
+    } elseif ($hours === false || $hours <= 0 || $hours > 24) {
+        $timeEntryActionNotice = ['type' => 'error', 'message' => 'Enter a number of hours greater than 0 and no more than 24.'];
+    } elseif ($description === '' || strlen($description) > 1000) {
+        $timeEntryActionNotice = ['type' => 'error', 'message' => 'Enter a work description up to 1,000 characters.'];
+    } elseif (
+        !$dateLogged
+        || $dateLogged->format('Y-m-d') !== $dateLoggedInput
+        || ($dateErrors !== false && ($dateErrors['warning_count'] > 0 || $dateErrors['error_count'] > 0))
+        || $dateLoggedInput > date('Y-m-d')
+    ) {
+        $timeEntryActionNotice = ['type' => 'error', 'message' => 'Enter a valid date that is not in the future.'];
+    } else {
+        $caseCheck = $pdo->prepare('SELECT case_id FROM cases WHERE case_id = :case_id LIMIT 1');
+        $caseCheck->execute(['case_id' => $caseId]);
+
+        if ($caseCheck->fetchColumn() === false) {
+            $timeEntryActionNotice = ['type' => 'error', 'message' => 'The selected case could not be found.'];
+        } else {
+            $insertTimeEntry = $pdo->prepare(
+                'INSERT INTO time_entries (case_id, user_id, hours, description, date_logged)
+                 VALUES (:case_id, :user_id, :hours, :description, :date_logged)'
+            );
+            $insertTimeEntry->execute([
+                'case_id' => $caseId,
+                'user_id' => (int) $_SESSION['admin_portal_user_id'],
+                'hours' => $hours,
+                'description' => $description,
+                'date_logged' => $dateLogged->format('Y-m-d'),
+            ]);
+            $timeEntryActionNotice = ['type' => 'success', 'message' => 'Billable hours saved to the database.'];
+        }
+    }
+
+    $_SESSION['admin_time_entry_notice'] = $timeEntryActionNotice;
+    header('Location: index.php?tab=hours');
     exit;
 }
 
 $appointmentActionNotice = $_SESSION['admin_appointment_notice'] ?? null;
 unset($_SESSION['admin_appointment_notice']);
+$timeEntryActionNotice = $_SESSION['admin_time_entry_notice'] ?? null;
+unset($_SESSION['admin_time_entry_notice']);
 if (!isset($_SESSION['admin_appointment_csrf_token'])) {
     $_SESSION['admin_appointment_csrf_token'] = bin2hex(random_bytes(32));
+}
+if (!isset($_SESSION['admin_time_entry_csrf_token'])) {
+    $_SESSION['admin_time_entry_csrf_token'] = bin2hex(random_bytes(32));
 }
 
 $accountRole = strtolower(trim($account['role']));
@@ -111,6 +173,16 @@ $pendingAppointmentsStatement = $pdo->query(
      ORDER BY a.appointment_date ASC, a.appointment_id ASC"
 );
 $pendingAppointments = $pendingAppointmentsStatement->fetchAll();
+$calendarAppointmentsStatement = $pdo->query(
+    "SELECT a.appointment_id, a.title, a.appointment_date, a.type, a.status,
+            c.fullname AS client_name, cs.case_number, cs.title AS case_title
+     FROM appointments a
+     LEFT JOIN clients c ON c.client_id = a.client_id
+     LEFT JOIN cases cs ON cs.case_id = a.case_id
+     WHERE a.status IN ('Pending', 'Confirmed')
+     ORDER BY a.appointment_date ASC, a.appointment_id ASC"
+);
+$calendarAppointments = $calendarAppointmentsStatement->fetchAll();
 $caseRecordsStatement = $pdo->query(
     "SELECT c.case_id, c.case_number, c.title, c.status, c.filed_date,
             cl.fullname AS client_name,
@@ -121,11 +193,20 @@ $caseRecordsStatement = $pdo->query(
      ORDER BY c.filed_date DESC, c.case_id DESC"
 );
 $caseRecords = $caseRecordsStatement->fetchAll();
+$timeEntriesStatement = $pdo->query(
+    'SELECT t.time_entry_id, t.hours, t.description, t.date_logged,
+            c.case_number, c.title AS case_title, u.username AS logged_by
+     FROM time_entries t
+     INNER JOIN cases c ON c.case_id = t.case_id
+     LEFT JOIN users u ON u.user_id = t.user_id
+     ORDER BY t.date_logged DESC, t.time_entry_id DESC'
+);
+$timeEntries = $timeEntriesStatement->fetchAll();
+$totalBillableHoursYtd = (float) $pdo->query(
+    'SELECT COALESCE(SUM(hours), 0) FROM time_entries WHERE YEAR(date_logged) = YEAR(CURDATE())'
+)->fetchColumn();
 $totalClients = (int) $pdo->query(
-    "SELECT COUNT(*)
-     FROM clients c
-     INNER JOIN users u ON u.user_id = c.user_id
-     WHERE LOWER(TRIM(u.role)) = 'client'"
+    'SELECT COUNT(*) FROM clients'
 )->fetchColumn();
 $clientRecordsStatement = $pdo->query(
     "SELECT c.client_id, c.fullname, c.email, c.phone, c.address
@@ -166,13 +247,18 @@ if ($userRole === 'admin') {
         window.ADMIN_TOTAL_CASES = <?php echo json_encode($totalCases); ?>;
         window.ADMIN_PENDING_APPOINTMENTS_COUNT = <?php echo json_encode($pendingAppointmentsCount); ?>;
         window.ADMIN_PENDING_APPOINTMENTS = <?php echo json_encode($pendingAppointments, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+        window.ADMIN_CALENDAR_APPOINTMENTS = <?php echo json_encode($calendarAppointments, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
         window.ADMIN_APPOINTMENT_CSRF_TOKEN = <?php echo json_encode($_SESSION['admin_appointment_csrf_token']); ?>;
         window.ADMIN_APPOINTMENT_NOTICE = <?php echo json_encode($appointmentActionNotice, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+        window.ADMIN_TIME_ENTRY_CSRF_TOKEN = <?php echo json_encode($_SESSION['admin_time_entry_csrf_token']); ?>;
+        window.ADMIN_TIME_ENTRY_NOTICE = <?php echo json_encode($timeEntryActionNotice, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+        window.ADMIN_TIME_ENTRIES = <?php echo json_encode($timeEntries, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+        window.ADMIN_TOTAL_BILLABLE_HOURS_YTD = <?php echo json_encode($totalBillableHoursYtd); ?>;
         window.ADMIN_CASE_RECORDS = <?php echo json_encode($caseRecords, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
         window.ADMIN_TOTAL_CLIENTS = <?php echo json_encode($totalClients); ?>;
         window.ADMIN_CLIENT_RECORDS = <?php echo json_encode($clientRecords, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
     </script>
     <script src="js/admin-storage.js"></script>
-    <script type="text/babel" src="js/admin-app.jsx?v=13"></script>
+    <script type="text/babel" src="js/admin-app.jsx?v=18"></script>
 </body>
 </html>

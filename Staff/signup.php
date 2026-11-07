@@ -41,13 +41,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $signupError = 'Enter a valid Gmail address ending in @gmail.com.';
     } elseif (
         !is_string($password)
-        || strlen($password) < 12
+        || strlen($password) < 8
         || preg_match('/[a-z]/', $password) !== 1
         || preg_match('/[A-Z]/', $password) !== 1
         || preg_match('/[0-9]/', $password) !== 1
         || preg_match('/[^a-zA-Z0-9]/', $password) !== 1
     ) {
-        $signupError = 'Use at least 12 characters, including lowercase and uppercase letters, a number, and a special character.';
+        $signupError = 'Use at least 8 characters, including lowercase and uppercase letters, a number, and a special character.';
     } elseif (!is_string($confirmPassword) || !hash_equals($password, $confirmPassword)) {
         $signupError = 'The passwords do not match.';
     } else {
@@ -185,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </button>
                     </div>
                     <ul id="password-requirements" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-400" aria-live="polite">
-                        <li class="inline-flex items-center gap-1.5" data-requirement="length"><span class="password-rule-indicator" aria-hidden="true"></span>At least 12 characters</li>
+                        <li class="inline-flex items-center gap-1.5" data-requirement="length"><span class="password-rule-indicator" aria-hidden="true"></span>At least 8 characters</li>
                         <li class="inline-flex items-center gap-1.5" data-requirement="lowercase"><span class="password-rule-indicator" aria-hidden="true"></span>Lowercase letter</li>
                         <li class="inline-flex items-center gap-1.5" data-requirement="uppercase"><span class="password-rule-indicator" aria-hidden="true"></span>Uppercase letter</li>
                         <li class="inline-flex items-center gap-1.5" data-requirement="number"><span class="password-rule-indicator" aria-hidden="true"></span>Number</li>

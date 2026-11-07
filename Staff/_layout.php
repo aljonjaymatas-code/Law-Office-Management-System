@@ -1,13 +1,14 @@
 <?php
-function staff_layout_start(string $title, array $user, string $activePage, string $success = '', string $error = ''): void
+function staff_layout_start(string $title, array $user, string $activePage, string $success = '', string $error = '', string $headerAction = '', string $headerActionTarget = ''): void
 {
     $navigation = [
-        'index.php' => ['Dashboard', 'layout-dashboard'],
-        'clients.php' => ['Clients', 'users-round'],
-        'cases.php' => ['Cases', 'briefcase-business'],
-        'appointments.php' => ['Appointments', 'calendar-days'],
-        'time_entries.php' => ['Time Entries', 'clock-3'],
-        'documents.php' => ['Documents', 'files'],
+        'index.php'         => ['Dashboard', 'layout-dashboard'],
+        'clients.php'       => ['Clients', 'users-round'],
+        'cases.php'         => ['Cases', 'briefcase-business'],
+        'appointments.php'  => ['Appointments', 'calendar-days'],
+        'time_entries.php'  => ['Time Entries', 'clock-3'],
+        'documents.php'     => ['Documents', 'files'],
+        'templates.php'     => ['Templates', 'file-text'],
     ];
     ?>
     <!DOCTYPE html>
@@ -28,7 +29,7 @@ function staff_layout_start(string $title, array $user, string $activePage, stri
     </head>
     <body class="min-h-screen bg-[#020617] text-slate-100 antialiased selection:bg-amber-500 selection:text-slate-950">
         <header class="sticky top-0 z-40 border-b border-amber-500/20 bg-slate-900/95 px-4 py-4 shadow-lg backdrop-blur-md sm:px-6">
-            <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
+            <div class="mx-auto flex max-w-screen-2xl flex-wrap items-center justify-between gap-4">
                 <a href="index.php" class="flex items-center gap-3">
                     <span class="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 text-slate-950 gold-glow-sm">
                         <i data-lucide="users" class="h-6 w-6"></i>
@@ -38,6 +39,29 @@ function staff_layout_start(string $title, array $user, string $activePage, stri
                         <span class="block text-xs font-semibold tracking-wider text-amber-400">STAFF PORTAL</span>
                     </span>
                 </a>
+                <form id="staff-search-form" method="get" action="search.php" role="search" class="order-3 w-full md:order-none md:mx-6 md:w-auto md:flex-1 md:max-w-xl">
+                    <label for="staff-global-search" class="sr-only">Search clients, cases, appointments, and documents</label>
+                    <div class="relative">
+                        <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+                        <input
+                            id="staff-global-search"
+                            name="q"
+                            type="search"
+                            maxlength="100"
+                            value="<?php echo staff_h(is_string($_GET['q'] ?? null) ? $_GET['q'] : ''); ?>"
+                            placeholder="Search clients, cases, appointments, documents..."
+                            autocomplete="off"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            aria-expanded="false"
+                            aria-controls="staff-search-suggestions"
+                            class="w-full rounded-lg border border-slate-700 bg-slate-950 py-2.5 pl-10 pr-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-amber-500">
+                        <div id="staff-search-dropdown" class="absolute left-0 right-0 top-full z-50 mt-2 hidden overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+                            <p id="staff-search-status" class="hidden px-4 py-3 text-sm text-slate-400" role="status"></p>
+                            <ul id="staff-search-suggestions" class="max-h-96 overflow-y-auto py-1" role="listbox" aria-label="Search suggestions"></ul>
+                        </div>
+                    </div>
+                </form>
                 <div class="flex items-center gap-4">
                     <div class="hidden text-right sm:block">
                         <p class="text-sm font-semibold text-white"><?php echo staff_h($user['username']); ?></p>
@@ -50,7 +74,7 @@ function staff_layout_start(string $title, array $user, string $activePage, stri
             </div>
         </header>
         <nav class="border-b border-slate-800 bg-slate-950/80 px-4 sm:px-6" aria-label="Staff sections">
-            <div class="mx-auto flex max-w-7xl gap-1 overflow-x-auto py-2">
+            <div class="mx-auto flex max-w-screen-2xl gap-1 overflow-x-auto py-2">
                 <?php foreach ($navigation as $path => [$label, $icon]): ?>
                     <a
                         href="<?php echo staff_h($path); ?>"
@@ -62,10 +86,24 @@ function staff_layout_start(string $title, array $user, string $activePage, stri
                 <?php endforeach; ?>
             </div>
         </nav>
-        <main class="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
-            <section class="rounded-2xl border border-amber-500/25 bg-gradient-to-r from-blue-900/40 via-slate-900/90 to-slate-900/90 p-5 shadow-xl sm:p-6">
-                <h1 class="text-2xl font-bold tracking-wide text-white"><?php echo staff_h($title); ?></h1>
-                <p class="mt-1 text-sm text-slate-300">Staff operations and records from the law office database.</p>
+        <main class="mx-auto max-w-screen-2xl space-y-6 p-4 sm:p-6">
+            <section class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-500/25 bg-gradient-to-r from-blue-900/40 via-slate-900/90 to-slate-900/90 p-5 shadow-xl sm:p-6">
+                <div>
+                    <h1 class="text-2xl font-bold tracking-wide text-white"><?php echo staff_h($title); ?></h1>
+                    <p class="mt-1 text-sm text-slate-300">Staff operations and records from the law office database.</p>
+                </div>
+                <?php if ($headerAction !== '' && $headerActionTarget !== ''): ?>
+                    <button
+                        type="button"
+                        data-dialog-toggle="<?php echo staff_h($headerActionTarget); ?>"
+                        aria-controls="<?php echo staff_h($headerActionTarget); ?>"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        class="inline-flex shrink-0 items-center gap-2 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:from-amber-500 hover:to-amber-400">
+                        <i data-lucide="plus" class="h-4 w-4"></i>
+                        <span><?php echo staff_h($headerAction); ?></span>
+                    </button>
+                <?php endif; ?>
             </section>
             <?php if ($success !== ''): ?>
                 <p role="status" class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200"><?php echo staff_h($success); ?></p>
@@ -82,6 +120,186 @@ function staff_layout_end(): void
         </main>
         <script>
             if (window.lucide) window.lucide.createIcons();
+
+            document.querySelectorAll('[data-dialog-toggle]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const dialog = document.getElementById(button.dataset.dialogToggle);
+                    if (!dialog) return;
+                    if (dialog.open) {
+                        dialog.close();
+                        return;
+                    }
+                    dialog.showModal();
+                    button.setAttribute('aria-expanded', 'true');
+                });
+            });
+
+            document.querySelectorAll('dialog[data-floating-form]').forEach((dialog) => {
+                const trigger = document.querySelector(`[data-dialog-toggle="${dialog.id}"]`);
+                const closeButton = dialog.querySelector('[data-dialog-close]');
+                const syncExpandedState = () => {
+                    if (trigger) trigger.setAttribute('aria-expanded', dialog.open ? 'true' : 'false');
+                };
+                if (closeButton) closeButton.addEventListener('click', () => dialog.close());
+                dialog.addEventListener('close', syncExpandedState);
+                dialog.addEventListener('click', (event) => {
+                    if (event.target === dialog) dialog.close();
+                });
+                if (dialog.dataset.openOnLoad === 'true') dialog.showModal();
+            });
+
+            (() => {
+                const form = document.getElementById('staff-search-form');
+                const input = document.getElementById('staff-global-search');
+                const dropdown = document.getElementById('staff-search-dropdown');
+                const list = document.getElementById('staff-search-suggestions');
+                const status = document.getElementById('staff-search-status');
+                if (!form || !input || !dropdown || !list || !status) return;
+
+                const navigationEntry = performance.getEntriesByType('navigation')[0];
+                const isReload = navigationEntry
+                    ? navigationEntry.type === 'reload'
+                    : performance.navigation && performance.navigation.type === 1;
+                if (isReload) input.value = '';
+
+                let debounceTimer;
+                let requestController;
+                let activeIndex = -1;
+
+                const closeDropdown = () => {
+                    dropdown.classList.add('hidden');
+                    input.setAttribute('aria-expanded', 'false');
+                    input.removeAttribute('aria-activedescendant');
+                    activeIndex = -1;
+                };
+
+                const showMessage = (message) => {
+                    list.replaceChildren();
+                    status.textContent = message;
+                    status.classList.remove('hidden');
+                    dropdown.classList.remove('hidden');
+                    input.setAttribute('aria-expanded', 'true');
+                    activeIndex = -1;
+                };
+
+                const setActiveOption = (index) => {
+                    const options = list.querySelectorAll('[role="option"]');
+                    if (options.length === 0) return;
+                    activeIndex = (index + options.length) % options.length;
+                    options.forEach((option, optionIndex) => {
+                        const selected = optionIndex === activeIndex;
+                        option.setAttribute('aria-selected', selected ? 'true' : 'false');
+                        option.classList.toggle('bg-slate-800', selected);
+                    });
+                    input.setAttribute('aria-activedescendant', options[activeIndex].id);
+                    options[activeIndex].scrollIntoView({block: 'nearest'});
+                };
+
+                const renderSuggestions = (results) => {
+                    list.replaceChildren();
+                    status.textContent = '';
+                    status.classList.add('hidden');
+
+                    if (results.length === 0) {
+                        showMessage('No matching records.');
+                        return;
+                    }
+
+                    results.forEach((result, index) => {
+                        const item = document.createElement('li');
+                        const link = document.createElement('a');
+                        const title = document.createElement('span');
+                        const details = document.createElement('span');
+                        const category = document.createElement('span');
+
+                        item.setAttribute('role', 'presentation');
+                        link.id = `staff-search-option-${index}`;
+                        link.href = result.href;
+                        link.setAttribute('role', 'option');
+                        link.setAttribute('aria-selected', 'false');
+                        link.tabIndex = -1;
+                        link.className = 'flex items-start justify-between gap-4 px-4 py-3 text-left transition hover:bg-slate-800';
+                        title.className = 'block truncate text-sm font-medium text-white';
+                        title.textContent = result.title;
+                        details.className = 'mt-1 block truncate text-xs text-slate-400';
+                        details.textContent = result.details;
+                        category.className = 'shrink-0 rounded-full border border-slate-700 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-300';
+                        category.textContent = result.category;
+
+                        const text = document.createElement('span');
+                        text.className = 'min-w-0';
+                        text.append(title, details);
+                        link.append(text, category);
+                        item.append(link);
+                        list.append(item);
+                    });
+
+                    dropdown.classList.remove('hidden');
+                    input.setAttribute('aria-expanded', 'true');
+                    setActiveOption(0);
+                };
+
+                const search = async () => {
+                    const query = input.value.trim();
+                    if (query.length < 1) {
+                        closeDropdown();
+                        return;
+                    }
+
+                    if (requestController) requestController.abort();
+                    requestController = new AbortController();
+                    showMessage('Searching...');
+
+                    try {
+                        const url = new URL('search.php', window.location.href);
+                        url.searchParams.set('q', query);
+                        url.searchParams.set('format', 'json');
+                        const response = await fetch(url, {
+                            headers: {'Accept': 'application/json'},
+                            signal: requestController.signal
+                        });
+                        const payload = await response.json();
+                        if (!response.ok) throw new Error(payload.error || 'Search request failed.');
+                        renderSuggestions(payload.results);
+                    } catch (error) {
+                        if (error.name === 'AbortError') return;
+                        console.error('Staff search suggestions failed.', error);
+                        showMessage('Search is unavailable. Press Enter to try the full search.');
+                    }
+                };
+
+                input.addEventListener('input', () => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(search, 200);
+                });
+
+                input.addEventListener('keydown', (event) => {
+                    const options = list.querySelectorAll('[role="option"]');
+                    if (event.key === 'ArrowDown' && options.length > 0) {
+                        event.preventDefault();
+                        setActiveOption(activeIndex + 1);
+                    } else if (event.key === 'ArrowUp' && options.length > 0) {
+                        event.preventDefault();
+                        setActiveOption(activeIndex < 0 ? options.length - 1 : activeIndex - 1);
+                    } else if (event.key === 'Enter' && activeIndex >= 0 && options[activeIndex]) {
+                        event.preventDefault();
+                        window.location.href = options[activeIndex].href;
+                    } else if (event.key === 'Escape') {
+                        closeDropdown();
+                    }
+                });
+
+                list.addEventListener('pointerover', (event) => {
+                    const option = event.target.closest('[role="option"]');
+                    if (!option) return;
+                    const options = Array.from(list.querySelectorAll('[role="option"]'));
+                    setActiveOption(options.indexOf(option));
+                });
+
+                document.addEventListener('pointerdown', (event) => {
+                    if (!form.contains(event.target)) closeDropdown();
+                });
+            })();
         </script>
     </body>
     </html>
