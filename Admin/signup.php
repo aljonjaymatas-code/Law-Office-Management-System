@@ -7,7 +7,7 @@ $userRole = $_SESSION['admin_portal_role'] ?? '';
 if (isset($_SESSION['admin_portal_user_id'])) {
     $sessionUserId = filter_var($_SESSION['admin_portal_user_id'], FILTER_VALIDATE_INT);
     if ($sessionUserId !== false && $sessionUserId !== null && $sessionUserId > 0) {
-        $sessionAccountStatement = $pdo->prepare('SELECT role FROM users WHERE user_id = :user_id LIMIT 1');
+        $sessionAccountStatement = $pdo->prepare('SELECT TOP (1) role FROM users WHERE user_id = :user_id');
         $sessionAccountStatement->execute(['user_id' => $sessionUserId]);
         $sessionAccountRole = $sessionAccountStatement->fetchColumn();
         if (
@@ -61,7 +61,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             $statement = $pdo->prepare(
-                'INSERT INTO users (username, email, password, role) VALUES (:username, :email, :password, :role)'
+                'INSERT INTO users (username, email, password, role)
+                 OUTPUT INSERTED.user_id
+                 VALUES (:username, :email, :password, :role)'
             );
             $statement->execute([
                 'username' => $username,
@@ -70,9 +72,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'role' => 'lawyer',
             ]);
 
+            $userId = (int) $statement->fetchColumn();
             session_regenerate_id(true);
             $_SESSION['admin_portal_role'] = 'lawyer';
-            $_SESSION['admin_portal_user_id'] = (int) $pdo->lastInsertId();
+            $_SESSION['admin_portal_user_id'] = $userId;
             unset($_SESSION['admin_signup_csrf']);
             header('Location: index.php');
             exit;

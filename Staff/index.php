@@ -9,7 +9,7 @@ $summary = [
     'clients' => (int) $pdo->query('SELECT COUNT(*) FROM clients')->fetchColumn(),
     'cases' => (int) $pdo->query('SELECT COUNT(*) FROM cases')->fetchColumn(),
     'appointments' => (int) $pdo->query(
-        "SELECT COUNT(*) FROM appointments WHERE appointment_date >= NOW() AND status NOT IN ('Cancelled', 'Completed')"
+        "SELECT COUNT(*) FROM appointments WHERE appointment_date >= CURRENT_TIMESTAMP AND status NOT IN ('Cancelled', 'Completed')"
     )->fetchColumn(),
 ];
 $timeStatement = $pdo->prepare('SELECT COALESCE(SUM(hours), 0) FROM time_entries WHERE user_id = :user_id');

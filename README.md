@@ -69,3 +69,11 @@ Regulatory Compliance: Ensures adherence to bar association ethics, client confi
 Deployment Options: Available as a cloud-based Software as a Service (SaaS) solution for remote access and scalability, or as an on-premises deployment for organizations with specific data residency requirements.
 
 Integrations: Connects seamlessly with standard productivity tools (Google Workspace, Microsoft 365), legal research platforms, communication channels, and third-party accounting applications.
+
+## Local SQL Server setup
+
+The PHP application connects to Microsoft SQL Server using the PDO_SQLSRV extension. The provided `.env.example` documents the settings; copy it to `.env` and set `DB_HOST`, `DB_NAME`, and `DB_AUTH` for your SQL Server instance. The local `.env` targets `localhost`, database `loms_v2`, and Windows Authentication.
+
+With Windows Authentication, SQL Server authorizes the Windows account running Apache, which may differ from the account used by SSMS when Apache runs as a service. For local XAMPP development, run the XAMPP Control Panel and Apache as the Windows user that can connect in SSMS, rather than starting Apache as the `LocalSystem` service account. Alternatively, grant Apache's service account access to `loms_v2`, or set `DB_AUTH=sql` and provide `DB_USERNAME` and `DB_PASSWORD` in `.env`. Keep `.env` private; it is excluded from Git.
+
+Apply `database/migrations/20261109_add_sql_server_portal_columns.sql` in SSMS before using the appointment-request and assigned-lawyer features. Apply `database/migrations/20261110_add_user_contact_columns.sql` to add or backfill the client contact fields in `dbo.users`. XAMPP must load the `pdo_sqlsrv` extension matching its PHP version.

@@ -17,8 +17,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Enter a client name between 2 and 150 characters.';
     } elseif ($emailInput !== '' && filter_var($emailInput, FILTER_VALIDATE_EMAIL) === false) {
         $error = 'Enter a valid email address or leave the email field blank.';
-    } elseif (strlen($phone) > 12) {
-        $error = 'The phone number must be 12 characters or fewer.';
+    } elseif ($phone !== '' && preg_match('/^[0-9]{1,11}$/D', $phone) !== 1) {
+        $error = 'The phone number must contain digits only and be no more than 11 digits.';
     } else {
         $statement = $pdo->prepare(
             'INSERT INTO clients (fullname, phone, email, address) VALUES (:fullname, :phone, :email, :address)'
@@ -76,7 +76,8 @@ staff_layout_start('Client Registration & Intake Management', $user, 'clients.ph
         </div>
         <div>
             <label for="phone" class="mb-1 block text-sm font-medium text-slate-200">Phone Number</label>
-            <input id="phone" name="phone" type="tel" maxlength="12" value="<?php echo staff_h($_POST['phone'] ?? ''); ?>" class="<?php echo staff_input_class(); ?>">
+            <input id="phone" name="phone" type="text" inputmode="numeric" pattern="[0-9]{0,11}" maxlength="11" autocomplete="tel-national" data-phone-input title="Enter up to 11 digits only." value="<?php echo staff_h($_POST['phone'] ?? ''); ?>" class="<?php echo staff_input_class(); ?>">
+            <p class="mt-1 text-xs text-slate-400">Enter up to 11 digits only (example: 09123456789).</p>
         </div>
         <div>
             <label for="address" class="mb-1 block text-sm font-medium text-slate-200">Physical Address</label>

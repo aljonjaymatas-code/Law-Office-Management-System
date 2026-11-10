@@ -118,6 +118,7 @@ function staff_layout_end(): void
 {
     ?>
         </main>
+        <script src="../JS/phone-input.js"></script>
         <script>
             if (window.lucide) window.lucide.createIcons();
 

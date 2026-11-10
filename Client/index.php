@@ -102,7 +102,7 @@ $appointmentsStatement = $pdo->prepare(
     'SELECT appointment_id, title, appointment_date, type, status
      FROM appointments
      WHERE client_id = :client_id
-       AND appointment_date >= NOW()
+       AND appointment_date >= CURRENT_TIMESTAMP
        AND status IN (\'Pending\', \'Confirmed\', \'Scheduled\')
      ORDER BY appointment_date ASC, appointment_id ASC'
 );

@@ -30,8 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Enter a client name (up to 150 characters).';
     } elseif ($clientEmail !== '' && (strlen($clientEmail) > 150 || filter_var($clientEmail, FILTER_VALIDATE_EMAIL) === false)) {
         $error = 'Enter a valid client email address or leave it blank.';
-    } elseif (strlen($clientPhone) > 20) {
-        $error = 'Client phone number must be 20 characters or fewer.';
+    } elseif ($clientPhone !== '' && preg_match('/^[0-9]{1,11}$/D', $clientPhone) !== 1) {
+        $error = 'Client phone number must contain digits only and be no more than 11 digits.';
     } elseif (strlen($lawyerName) > 150) {
         $error = 'Assigned lawyer name must be 150 characters or fewer.';
     } elseif (!in_array($status, $allowedStatuses, true)) {
@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($description !== '' && strlen($description) > 65535) {
         $error = 'Case description is too long.';
     } else {
-        $duplicateCheck = $pdo->prepare('SELECT case_id FROM cases WHERE case_number = :case_number LIMIT 1');
+        $duplicateCheck = $pdo->prepare('SELECT TOP (1) case_id FROM cases WHERE case_number = :case_number');
         $duplicateCheck->execute(['case_number' => $caseNumber]);
 
         if ($duplicateCheck->fetchColumn() !== false) {
@@ -54,11 +54,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->beginTransaction();
                 $clientLookup = $pdo->prepare(
                     "SELECT c.client_id
-                     FROM clients c
+                     FROM clients c WITH (UPDLOCK, ROWLOCK)
                      INNER JOIN users u ON u.user_id = c.user_id
                      WHERE LOWER(TRIM(u.role)) = 'client'
                        AND LOWER(TRIM(c.fullname)) = LOWER(TRIM(:fullname))
-                     FOR UPDATE"
+                     "
                 );
                 $clientLookup->execute(['fullname' => $clientName]);
                 $matchingClientIds = $clientLookup->fetchAll(PDO::FETCH_COLUMN);
@@ -72,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } else {
                         $clientInsert = $pdo->prepare(
                             'INSERT INTO clients (fullname, phone, email, address)
+                             OUTPUT INSERTED.client_id
                              VALUES (:fullname, :phone, :email, :address)'
                         );
                         $clientInsert->execute([
@@ -80,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'email' => $clientEmail !== '' ? $clientEmail : null,
                             'address' => $clientAddress !== '' ? $clientAddress : null,
                         ]);
-                        $clientId = (int) $pdo->lastInsertId();
+                        $clientId = (int) $clientInsert->fetchColumn();
                     }
 
                     $caseInsert = $pdo->prepare(
@@ -163,7 +164,8 @@ staff_layout_start('Case Management', $user, 'cases.php', staff_take_flash(), $e
         </div>
         <div>
             <label for="client_phone" class="mb-1 block text-sm font-medium text-slate-200">Client Phone</label>
-            <input id="client_phone" name="client_phone" type="tel" maxlength="20" value="<?php echo staff_h($_POST['client_phone'] ?? ''); ?>" class="<?php echo staff_input_class(); ?>">
+            <input id="client_phone" name="client_phone" type="text" inputmode="numeric" pattern="[0-9]{0,11}" maxlength="11" autocomplete="tel-national" data-phone-input title="Enter up to 11 digits only." value="<?php echo staff_h($_POST['client_phone'] ?? ''); ?>" class="<?php echo staff_input_class(); ?>">
+            <p class="mt-1 text-xs text-slate-400">Enter up to 11 digits only (example: 09123456789).</p>
         </div>
         <div>
             <label for="client_address" class="mb-1 block text-sm font-medium text-slate-200">Client Address</label>

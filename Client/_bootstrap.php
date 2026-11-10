@@ -39,11 +39,13 @@ function client_current_user(PDO $pdo): ?array
     }
 
     $statement = $pdo->prepare(
-        "SELECT u.user_id, u.username, u.email, u.role, c.client_id, c.fullname, c.phone, c.address
+        "SELECT TOP (1) u.user_id, u.username, u.email, u.role, c.client_id, c.fullname,
+                COALESCE(NULLIF(u.phone, ''), c.phone) AS phone,
+                COALESCE(NULLIF(u.address, ''), c.address) AS address
          FROM users u
          INNER JOIN clients c ON c.user_id = u.user_id
          WHERE u.user_id = :user_id AND LOWER(TRIM(u.role)) = 'client'
-         LIMIT 1"
+         "
     );
     $statement->execute(['user_id' => $userId]);
     $user = $statement->fetch();

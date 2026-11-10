@@ -36,8 +36,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         || strtolower(substr($emailValue, -10)) !== '@gmail.com'
     ) {
         $signupError = 'Enter a valid Gmail address ending in @gmail.com.';
-    } elseif (strlen($phoneValue) > 11) {
-        $signupError = 'Phone number must be 11 characters or fewer.';
+    } elseif ($phoneValue !== '' && preg_match('/^[0-9]{1,11}$/D', $phoneValue) !== 1) {
+        $signupError = 'Phone number must contain digits only and be no more than 11 digits.';
+    } elseif (strlen($addressValue) > 50) {
+        $signupError = 'Address must be 50 characters or fewer.';
     } elseif (
         !is_string($password)
         || strlen($password) < 12
@@ -53,15 +55,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
             $userStatement = $pdo->prepare(
-                'INSERT INTO users (username, email, password, role) VALUES (:username, :email, :password, :role)'
+                'INSERT INTO users (username, email, password, role, phone, address)
+                 OUTPUT INSERTED.user_id
+                 VALUES (:username, :email, :password, :role, :phone, :address)'
             );
             $userStatement->execute([
                 'username' => $usernameValue,
                 'email' => strtolower($email),
                 'password' => password_hash($password, PASSWORD_DEFAULT),
                 'role' => 'Client',
+                'phone' => $phoneValue !== '' ? $phoneValue : null,
+                'address' => $addressValue !== '' ? $addressValue : null,
             ]);
-            $userId = (int) $pdo->lastInsertId();
+            $userId = (int) $userStatement->fetchColumn();
 
             $clientStatement = $pdo->prepare(
                 'INSERT INTO clients (user_id, fullname, phone, email, address)
@@ -154,11 +160,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label for="phone" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-amber-400">Phone Number</label>
-                        <input id="phone" name="phone" type="tel" maxlength="12" autocomplete="tel" value="<?php echo client_h($phoneValue); ?>" class="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500" placeholder="Phone number">
+                        <input id="phone" name="phone" type="text" inputmode="numeric" pattern="[0-9]{0,11}" maxlength="11" autocomplete="tel-national" data-phone-input title="Enter up to 11 digits only." value="<?php echo client_h($phoneValue); ?>" class="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500" placeholder="09XXXXXXXXX">
+                        <p class="mt-1 text-xs text-slate-400">Enter up to 11 digits only (example: 09123456789).</p>
                     </div>
                     <div>
                         <label for="address" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-amber-400">Address</label>
-                        <input id="address" name="address" type="text" autocomplete="street-address" value="<?php echo client_h($addressValue); ?>" class="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500" placeholder="Your address">
+                        <input id="address" name="address" type="text" maxlength="50" autocomplete="street-address" value="<?php echo client_h($addressValue); ?>" class="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500" placeholder="Your address">
+                        <p class="mt-1 text-xs text-slate-400">Up to 50 characters.</p>
                     </div>
                 </div>
                 <div>
@@ -197,6 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </p>
         </section>
     </main>
+    <script src="../JS/phone-input.js"></script>
     <script>
         const passwordInput = document.getElementById('password');
         const passwordRules = {

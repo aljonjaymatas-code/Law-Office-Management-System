@@ -10,7 +10,7 @@ if (!in_array($userRole, ['admin', 'lawyer'], true) || empty($_SESSION['admin_po
     exit;
 }
 
-$statement = $pdo->prepare('SELECT username, email, role FROM users WHERE user_id = :user_id LIMIT 1');
+$statement = $pdo->prepare('SELECT TOP (1) username, email, role FROM users WHERE user_id = :user_id');
 $statement->execute(['user_id' => (int) $_SESSION['admin_portal_user_id']]);
 $account = $statement->fetch();
 
@@ -47,9 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
         $pdo->beginTransaction();
         $pendingCheck = $pdo->prepare(
             "SELECT appointment_id
-             FROM appointments
-             WHERE appointment_id = :appointment_id AND status = 'Pending'
-             FOR UPDATE"
+             FROM appointments WITH (UPDLOCK, ROWLOCK)
+             WHERE appointment_id = :appointment_id AND status = 'Pending'"
         );
         $pendingCheck->execute(['appointment_id' => $appointmentId]);
 
@@ -108,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
     ) {
         $timeEntryActionNotice = ['type' => 'error', 'message' => 'Enter a valid date that is not in the future.'];
     } else {
-        $caseCheck = $pdo->prepare('SELECT case_id FROM cases WHERE case_id = :case_id LIMIT 1');
+        $caseCheck = $pdo->prepare('SELECT TOP (1) case_id FROM cases WHERE case_id = :case_id');
         $caseCheck->execute(['case_id' => $caseId]);
 
         if ($caseCheck->fetchColumn() === false) {
@@ -203,13 +202,15 @@ $timeEntriesStatement = $pdo->query(
 );
 $timeEntries = $timeEntriesStatement->fetchAll();
 $totalBillableHoursYtd = (float) $pdo->query(
-    'SELECT COALESCE(SUM(hours), 0) FROM time_entries WHERE YEAR(date_logged) = YEAR(CURDATE())'
+    'SELECT COALESCE(SUM(hours), 0) FROM time_entries WHERE YEAR(date_logged) = YEAR(GETDATE())'
 )->fetchColumn();
 $totalClients = (int) $pdo->query(
     'SELECT COUNT(*) FROM clients'
 )->fetchColumn();
 $clientRecordsStatement = $pdo->query(
-    "SELECT c.client_id, c.fullname, c.email, c.phone, c.address
+    "SELECT c.client_id, c.fullname, c.email,
+            COALESCE(NULLIF(u.phone, ''), c.phone) AS phone,
+            COALESCE(NULLIF(u.address, ''), c.address) AS address
      FROM clients c
      INNER JOIN users u ON u.user_id = c.user_id
      WHERE LOWER(TRIM(u.role)) = 'client'
@@ -218,7 +219,7 @@ $clientRecordsStatement = $pdo->query(
 $clientRecords = $clientRecordsStatement->fetchAll();
 if ($userRole === 'admin') {
     $usersStatement = $pdo->query(
-        'SELECT user_id, username, email, role, DATE(created_at) AS created_at FROM users ORDER BY user_id ASC'
+        'SELECT user_id, username, email, role, CAST(created_at AS date) AS created_at FROM users ORDER BY user_id ASC'
     );
     $usersList = $usersStatement->fetchAll();
 }
