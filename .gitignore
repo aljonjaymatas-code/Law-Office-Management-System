@@ -1,1 +1,9 @@
 .env
+/Staff/template_uploads/
+/Staff/template_previews/
+!/Staff/template_uploads/
+!/Staff/template_previews/
+/Staff/template_uploads/*
+/Staff/template_previews/*
+!/Staff/template_uploads/.htaccess
+!/Staff/template_previews/.htaccess

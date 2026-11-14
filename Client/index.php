@@ -10,6 +10,13 @@ if ($user === null) {
 
 $appointmentNotice = '';
 $appointmentNoticeType = 'success';
+$availableAttorneysStatement = $pdo->query(
+    "SELECT username
+     FROM users
+     WHERE LOWER(TRIM(role)) IN ('lawyer', 'attorney')
+     ORDER BY username ASC"
+);
+$availableAttorneys = $availableAttorneysStatement->fetchAll(PDO::FETCH_COLUMN);
 $appointmentFormValues = [
     'matter_type' => 'Family Law',
     'other_matter' => '',
@@ -31,6 +38,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $matterType = is_string($matterTypeInput) ? trim($matterTypeInput) : '';
     $otherMatter = is_string($otherMatterInput) ? trim($otherMatterInput) : '';
     $preferredAttorney = is_string($preferredAttorneyInput) ? trim($preferredAttorneyInput) : '';
+    $matchedAttorney = null;
+    foreach ($availableAttorneys as $availableAttorney) {
+        if (strcasecmp($preferredAttorney, (string) $availableAttorney) === 0) {
+            $matchedAttorney = (string) $availableAttorney;
+            break;
+        }
+    }
     $issueDescription = is_string($issueDescriptionInput) ? trim($issueDescriptionInput) : '';
     $allowedTypes = ['Family Law', 'Criminal Law', 'Real Estate Law', 'Business Law', 'Other'];
     $appointmentType = $matterType === 'Other' ? $otherMatter : $matterType;
@@ -52,6 +66,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         || $appointmentDate <= new DateTime()
     ) {
         $appointmentNotice = 'Choose a valid future date and time for your appointment request.';
+        $appointmentNoticeType = 'error';
+    } elseif ($preferredAttorney !== '' && $matchedAttorney === null) {
+        $appointmentNotice = 'Choose a preferred attorney from the available list, or select no preference.';
         $appointmentNoticeType = 'error';
     } elseif (
         ($_POST['confirmed'] ?? null) !== '1'
@@ -78,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'appointment_date' => $appointmentDate->format('Y-m-d H:i:s'),
             'type' => $appointmentType,
             'status' => 'Pending',
-            'preferred_attorney' => $preferredAttorney !== '' ? $preferredAttorney : null,
+            'preferred_attorney' => $matchedAttorney,
             'issue_description' => $issueDescription !== '' ? $issueDescription : null,
         ]);
         $_SESSION['client_flash'] = 'Appointment request sent to the staff. It is pending confirmation.';
@@ -147,6 +164,7 @@ $clientPortalData = [
     'appointmentNotice' => $appointmentNotice,
     'appointmentNoticeType' => $appointmentNoticeType,
     'appointmentFormValues' => $appointmentFormValues,
+    'availableAttorneys' => $availableAttorneys,
     'csrfToken' => client_csrf_token(),
     'documents' => $documents,
 ];

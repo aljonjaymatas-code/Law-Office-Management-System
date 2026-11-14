@@ -4,6 +4,24 @@ require_once __DIR__ . '/_layout.php';
 
 $user = staff_require_auth($pdo);
 
+$attorneysStatement = $pdo->query(
+    "SELECT user_id, username
+     FROM users
+     WHERE LOWER(TRIM(role)) IN ('lawyer', 'attorney')
+     ORDER BY username ASC"
+);
+$attorneys = $attorneysStatement->fetchAll(PDO::FETCH_ASSOC);
+$attorneysById = [];
+foreach ($attorneys as $attorney) {
+    $attorneysById[(int) $attorney['user_id']] = (string) $attorney['username'];
+}
+$postedLawyerId = $_POST['assigned_lawyer_id'] ?? '';
+$selectedLawyerId = is_string($postedLawyerId)
+    && ctype_digit($postedLawyerId)
+    && isset($attorneysById[(int) $postedLawyerId])
+        ? $postedLawyerId
+        : '';
+
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $caseNumber = trim((string) ($_POST['case_number'] ?? ''));
@@ -12,7 +30,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $clientEmail = trim((string) ($_POST['client_email'] ?? ''));
     $clientPhone = trim((string) ($_POST['client_phone'] ?? ''));
     $clientAddress = trim((string) ($_POST['client_address'] ?? ''));
-    $lawyerName = trim((string) ($_POST['assigned_lawyer_name'] ?? ''));
+    $lawyerIdInput = $_POST['assigned_lawyer_id'] ?? '';
+    $lawyerId = is_string($lawyerIdInput) && $lawyerIdInput !== ''
+        ? filter_var($lawyerIdInput, FILTER_VALIDATE_INT)
+        : ($lawyerIdInput === '' ? null : false);
+    $lawyerName = is_int($lawyerId) && isset($attorneysById[$lawyerId])
+        ? $attorneysById[$lawyerId]
+        : '';
     $status = trim((string) ($_POST['status'] ?? ''));
     $filedDateInput = trim((string) ($_POST['filed_date'] ?? ''));
     $description = trim((string) ($_POST['description'] ?? ''));
@@ -32,8 +56,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Enter a valid client email address or leave it blank.';
     } elseif ($clientPhone !== '' && preg_match('/^[0-9]{1,11}$/D', $clientPhone) !== 1) {
         $error = 'Client phone number must contain digits only and be no more than 11 digits.';
-    } elseif (strlen($lawyerName) > 150) {
-        $error = 'Assigned lawyer name must be 150 characters or fewer.';
+    } elseif (
+        $lawyerId === false
+        || ($lawyerId !== null && ($lawyerId < 1 || !array_key_exists($lawyerId, $attorneysById)))
+    ) {
+        $error = 'Select an attorney from the available list, or leave the case unassigned.';
     } elseif (!in_array($status, $allowedStatuses, true)) {
         $error = 'Select a valid case status.';
     } elseif (
@@ -86,12 +113,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $caseInsert = $pdo->prepare(
                         'INSERT INTO cases
-                            (client_id, assigned_lawyer_name, case_number, title, description, status, filed_date)
+                            (client_id, assigned_lawyer_id, assigned_lawyer_name, case_number, title, description, status, filed_date)
                          VALUES
-                            (:client_id, :assigned_lawyer_name, :case_number, :title, :description, :status, :filed_date)'
+                            (:client_id, :assigned_lawyer_id, :assigned_lawyer_name, :case_number, :title, :description, :status, :filed_date)'
                     );
                     $caseInsert->execute([
                         'client_id' => $clientId,
+                        'assigned_lawyer_id' => $lawyerId,
                         'assigned_lawyer_name' => $lawyerName !== '' ? $lawyerName : null,
                         'case_number' => $caseNumber,
                         'title' => $title,
@@ -155,8 +183,13 @@ staff_layout_start('Case Management', $user, 'cases.php', staff_take_flash(), $e
             <p class="mt-1 text-xs text-slate-400">Use the registered Client account name to link this case to their Client Portal. If no account matches, a separate intake record is created.</p>
         </div>
         <div>
-            <label for="assigned_lawyer_name" class="mb-1 block text-sm font-medium text-slate-200">Assigned Lawyer</label>
-            <input id="assigned_lawyer_name" name="assigned_lawyer_name" type="text" maxlength="150" value="<?php echo staff_h($_POST['assigned_lawyer_name'] ?? ''); ?>" class="<?php echo staff_input_class(); ?>">
+            <label for="assigned_lawyer_id" class="mb-1 block text-sm font-medium text-slate-200">Assigned Lawyer</label>
+            <select id="assigned_lawyer_id" name="assigned_lawyer_id" class="<?php echo staff_input_class(); ?>">
+                <option value="" disabled hidden <?php echo $selectedLawyerId === '' ? 'selected' : ''; ?>>Unassigned</option>
+                <?php foreach ($attorneys as $attorney): ?>
+                    <option value="<?php echo (int) $attorney['user_id']; ?>" <?php echo $selectedLawyerId === (string) $attorney['user_id'] ? 'selected' : ''; ?>><?php echo staff_h($attorney['username']); ?></option>
+                <?php endforeach; ?>
+            </select>
         </div>
         <div>
             <label for="client_email" class="mb-1 block text-sm font-medium text-slate-200">Client Email</label>

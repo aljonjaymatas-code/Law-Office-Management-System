@@ -1,5 +1,5 @@
 <?php
-function staff_layout_start(string $title, array $user, string $activePage, string $success = '', string $error = '', string $headerAction = '', string $headerActionTarget = ''): void
+function staff_layout_start(string $title, array $user, string $activePage, string $success = '', string $error = '', string $headerAction = '', string $headerActionTarget = '', array $headStylesheets = [], array $headScripts = []): void
 {
     $themeStorageKey = 'staff-portal-theme:' . strtolower((string) $user['email']);
     $navigation = [
@@ -35,6 +35,12 @@ function staff_layout_start(string $title, array $user, string $activePage, stri
         </script>
         <script src="https://cdn.tailwindcss.com"></script>
         <script src="https://unpkg.com/lucide@latest"></script>
+        <?php foreach ($headStylesheets as $stylesheet): ?>
+            <link rel="stylesheet" href="<?php echo staff_h($stylesheet); ?>">
+        <?php endforeach; ?>
+        <?php foreach ($headScripts as $script): ?>
+            <script src="<?php echo staff_h($script); ?>" defer></script>
+        <?php endforeach; ?>
         <link rel="stylesheet" href="../CSS/staff-styles.css">
         <link rel="stylesheet" href="../CSS/portal-themes.css">
         <style>
@@ -82,12 +88,48 @@ function staff_layout_start(string $title, array $user, string $activePage, stri
                 <div class="relative shrink-0" id="staff-account-menu-container">
                     <button
                         type="button"
+                        id="staff-notification-toggle"
+                        aria-label="Notifications"
+                        aria-expanded="false"
+                        aria-controls="staff-notification-panel"
+                        class="staff-header-icon inline-flex h-10 w-10 items-center justify-center rounded-full border-5 transition focus:outline-none focus:ring-2">
+                        <i data-lucide="bell" class="h-5 w-5"></i>
+                    </button>
+                    <div id="staff-notification-panel" class="staff-notification-panel hidden" aria-live="polite">
+                        <div class="staff-notification-header">
+                            <h2>Notifications</h2>
+                        </div>
+                        <div class="staff-notification-list">
+                            <article class="notification-item">
+                                <h3>Appointment confirmed</h3>
+                                <p>Family Law Consultation is confirmed for Nov 12, 2026 3:00 PM.</p>
+                                <time>12/11/2026, 13:25:00</time>
+                            </article>
+                            <article class="notification-item">
+                                <h3>New appointment request</h3>
+                                <p>demo4 requested Family Law on Nov 12, 2026 3:00 PM.</p>
+                                <time>12/11/2026, 13:24:54</time>
+                            </article>
+                            <article class="notification-item is-unread">
+                                <h3>New appointment request</h3>
+                                <p>demo4 requested Family Law on Nov 12, 2026 3:00 PM.</p>
+                                <time>12/11/2026, 13:24:07</time>
+                            </article>
+                            <article class="notification-item">
+                                <h3>Client requested document access</h3>
+                                <p>demo4 requested access to "Notary" for case Notary.</p>
+                                <time>12/11/2026, 13:21:12</time>
+                            </article>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
                         id="staff-account-menu-toggle"
                         aria-label="Open Staff account menu"
                         aria-expanded="false"
                         aria-controls="staff-account-menu"
-                        class="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-amber-500 text-amber-400 transition hover:bg-amber-500/10 focus:outline-none focus:ring-2 focus:ring-amber-400">
-                        <i data-lucide="user-round" class="h-6 w-6"></i>
+                        class="staff-header-icon ml-3 inline-flex h-10 w-10 items-center justify-center rounded-full border-5 transition focus:outline-none focus:ring-2">
+                        <i data-lucide="user-round" class="h-5 w-5"></i>
                     </button>
                     <div id="staff-account-menu" class="absolute right-0 top-full z-50 mt-3 hidden max-h-[calc(100vh-5rem)] w-[min(18rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
                         <div class="flex items-center gap-3 border-b border-slate-800 px-5 py-5">
@@ -106,7 +148,7 @@ function staff_layout_start(string $title, array $user, string $activePage, stri
                                     href="<?php echo staff_h($path); ?>"
                                     class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition <?php echo $activePage === $path ? 'bg-amber-500/15 text-amber-300' : 'text-slate-300 hover:bg-slate-800 hover:text-white'; ?>"
                                     <?php echo $activePage === $path ? 'aria-current="page"' : ''; ?>>
-                                    <i data-lucide="<?php echo staff_h($icon); ?>" class="h-4 w-4 shrink-0"></i>
+                                    <i data-lucide="<?php echo staff_h($icon); ?>" class="<?php echo $path === 'documents.php' ? 'h-3.5 w-3.5' : 'h-4 w-4'; ?> shrink-0"></i>
                                     <span><?php echo staff_h($label); ?></span>
                                 </a>
                             <?php endforeach; ?>
@@ -139,7 +181,7 @@ function staff_layout_start(string $title, array $user, string $activePage, stri
                         href="<?php echo staff_h($path); ?>"
                         class="inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition <?php echo $activePage === $path ? 'bg-amber-500 text-slate-950' : 'text-slate-300 hover:bg-slate-800 hover:text-white'; ?>"
                         <?php echo $activePage === $path ? 'aria-current="page"' : ''; ?>>
-                        <i data-lucide="<?php echo staff_h($icon); ?>" class="h-4 w-4"></i>
+                        <i data-lucide="<?php echo staff_h($icon); ?>" class="<?php echo $path === 'documents.php' ? 'h-3.5 w-3.5' : 'h-4 w-4'; ?>"></i>
                         <?php echo staff_h($label); ?>
                     </a>
                 <?php endforeach; ?>
@@ -203,6 +245,59 @@ function staff_layout_end(): void
                         setOpen(false);
                         toggle.focus();
                     }
+                });
+            })();
+
+            (() => {
+                const notificationToggle = document.getElementById('staff-notification-toggle');
+                const notificationPanel = document.getElementById('staff-notification-panel');
+                if (!notificationToggle || !notificationPanel) return;
+
+                const setNotificationOpen = (open) => {
+                    notificationPanel.classList.toggle('hidden', !open);
+                    notificationToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                };
+
+                notificationToggle.addEventListener('click', () => {
+                    setNotificationOpen(notificationToggle.getAttribute('aria-expanded') !== 'true');
+                });
+
+                document.addEventListener('pointerdown', (event) => {
+                    const clickedInside = notificationToggle.contains(event.target) || notificationPanel.contains(event.target);
+                    if (!clickedInside) setNotificationOpen(false);
+                });
+
+                window.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && notificationToggle.getAttribute('aria-expanded') === 'true') {
+                        setNotificationOpen(false);
+                        notificationToggle.focus();
+                    }
+                });
+            })();
+
+            (() => {
+                const syncHeaderIconTheme = () => {
+                    const root = document.documentElement;
+                    const accent = getComputedStyle(root).getPropertyValue('--portal-accent-400').trim() || '#f59e0b';
+                    const hover = getComputedStyle(root).getPropertyValue('--portal-accent-300').trim() || '#fcd34d';
+                    document.querySelectorAll('.staff-header-icon').forEach((button) => {
+                        button.style.setProperty('--staff-icon-color', accent);
+                        button.style.setProperty('--staff-icon-hover-color', hover);
+                        button.style.borderColor = accent;
+                        button.style.color = accent;
+                        button.querySelectorAll('svg, i, path, .lucide').forEach((icon) => {
+                            icon.style.color = accent;
+                            icon.style.stroke = accent;
+                            icon.style.fill = 'none';
+                        });
+                    });
+                };
+
+                syncHeaderIconTheme();
+                const observer = new MutationObserver(() => syncHeaderIconTheme());
+                observer.observe(document.documentElement, {
+                    attributes: true,
+                    attributeFilter: ['data-staff-theme']
                 });
             })();
 

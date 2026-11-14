@@ -23,16 +23,20 @@ function ClientPortal() {
   const currentView = 'dashboard';
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(portalData.appointmentNoticeType === 'error');
   const [customizationOpen, setCustomizationOpen] = useState(false);
-  const [settingsPanelView, setSettingsPanelView] = useState('account-settings');
+  const [settingsPanelView, setSettingsPanelView] = useState('menu');
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [clientTheme, setClientTheme] = useState(document.documentElement.dataset.clientTheme || 'amber');
   const [themeStorageError, setThemeStorageError] = useState(Boolean(window.CLIENT_PORTAL_THEME_STORAGE_ERROR));
   const appearancePanelRef = useRef(null);
+  const notificationsPanelRef = useRef(null);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [documentRequestNotice, setDocumentRequestNotice] = useState('');
   const [documentAccessRequests, setDocumentAccessRequests] = useState(readDocumentAccessRequests);
   const clientProfile = portalData.profile;
   const activeCases = portalData.activeCases;
   const upcomingAppointments = portalData.upcomingAppointments;
+  const pendingAppointmentCount = upcomingAppointments.filter((appointment) => appointment.status === 'Pending').length;
+  const availableAttorneys = Array.isArray(portalData.availableAttorneys) ? portalData.availableAttorneys : [];
   const [caseDocuments, setCaseDocuments] = useState(portalData.documents);
 
   // State for the Appointment Form
@@ -67,6 +71,23 @@ function ClientPortal() {
       window.removeEventListener('keydown', closeAppearancePanel);
     };
   }, [customizationOpen]);
+
+  useEffect(() => {
+    if (!notificationsOpen) return undefined;
+    const closeNotifications = (event) => {
+      if (event.key === 'Escape') {
+        setNotificationsOpen(false);
+      } else if (event.type === 'pointerdown' && !notificationsPanelRef.current?.contains(event.target)) {
+        setNotificationsOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', closeNotifications);
+    window.addEventListener('keydown', closeNotifications);
+    return () => {
+      document.removeEventListener('pointerdown', closeNotifications);
+      window.removeEventListener('keydown', closeNotifications);
+    };
+  }, [notificationsOpen]);
 
   useEffect(() => {
     const syncDocumentRequests = (event) => {
@@ -314,58 +335,115 @@ function ClientPortal() {
             <span className="block text-xs text-amber-400 font-semibold tracking-wider">CLIENT PORTAL</span>
           </div>
         </div>
-        <div className="flex items-center space-x-4">
-          {/*<button 
-            onClick={() => setIsScheduleModalOpen(true)}
-            className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-sm transition shadow-md">
-            <i data-lucide="calendar-plus" className="w-4 h-4"></i> 
-          </button>*/}
-          <div className="text-right hidden sm:block">
-            <p className="text-sm font-semibold text-white">{clientProfile.fullname}</p>
-            <p className="text-xs text-slate-400">{clientProfile.email}</p>
+        <div className="flex items-center gap-2">
+          <div className="relative" ref={notificationsPanelRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setCustomizationOpen(false);
+                setNotificationsOpen((open) => !open);
+              }}
+              aria-label={`Notifications${pendingAppointmentCount ? `, ${pendingAppointmentCount} pending appointments` : ''}`}
+              aria-expanded={notificationsOpen}
+              aria-controls="client-notifications-popover"
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-300 transition hover:border-amber-500/40 hover:text-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                <path d="M10 21h4" />
+              </svg>
+              {pendingAppointmentCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-slate-900 bg-red-500 px-1 text-[10px] font-bold text-white">
+                  {pendingAppointmentCount > 9 ? '9+' : pendingAppointmentCount}
+                </span>
+              )}
+            </button>
+            {notificationsOpen && (
+              <section
+                id="client-notifications-popover"
+                aria-label="Notifications"
+                className="absolute right-0 top-full z-[60] mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+                <div className="border-b border-slate-800 p-4">
+                  <h2 className="text-sm font-semibold text-white">Notifications</h2>
+                  <p className="mt-1 text-xs text-slate-400">Updates about your upcoming appointments.</p>
+                </div>
+                <div className="max-h-80 overflow-y-auto p-2">
+                  {upcomingAppointments.length > 0 ? upcomingAppointments.map((appointment) => (
+                    <div key={appointment.appointment_id} className="border-b border-slate-800 px-3 py-3 last:border-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-semibold text-white">{appointment.title}</p>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${appointment.status === 'Pending' ? 'bg-amber-500/10 text-amber-300' : 'bg-emerald-500/10 text-emerald-300'}`}>
+                          {appointment.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {new Date(String(appointment.appointment_date).replace(' ', 'T')).toLocaleString()}
+                      </p>
+                    </div>
+                  )) : (
+                    <p role="status" className="m-2 rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-center text-sm text-slate-400">
+                      You’re all caught up. New appointment updates will appear here.
+                    </p>
+                  )}
+                </div>
+              </section>
+            )}
           </div>
           <div className="relative" ref={appearancePanelRef}>
             <button
               type="button"
-              onClick={() => setCustomizationOpen((open) => !open)}
-              aria-label="Open account settings and customization"
+              onClick={() => {
+                setSettingsPanelView('menu');
+                setNotificationsOpen(false);
+                setCustomizationOpen((open) => !open);
+              }}
+              aria-label={`Open profile menu for ${clientProfile.fullname}`}
               aria-expanded={customizationOpen}
-              aria-controls="client-appearance-panel"
-              className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 transition hover:border-amber-500/60 hover:text-white">
-              <i data-lucide="user-round-cog" className="h-4 w-4 text-amber-400"></i>
-              <span className="hidden sm:inline">Settings</span>
+              aria-controls="client-profile-popover"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 transition hover:bg-amber-500/20 focus:outline-none focus:ring-2 focus:ring-amber-500">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                <circle cx="12" cy="8" r="5" />
+                <path d="M20 21a8 8 0 0 0-16 0" />
+              </svg>
             </button>
             {customizationOpen && (
-              <section id="client-appearance-panel" role="dialog" aria-label="Account settings and customization" className="absolute right-0 top-full z-[60] mt-2 w-[min(22rem,90vw)] rounded-xl border border-slate-700 bg-slate-950 p-4 shadow-2xl">
-                <div className="mb-3 flex items-center justify-between gap-3">
+              <section id="client-profile-popover" role="dialog" aria-label="Profile and customization" className="absolute right-0 top-full z-[60] mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-800 p-4">
                   <div>
-                    <h2 className="text-sm font-semibold text-white">{settingsPanelView === 'account-settings' ? 'Account Settings' : 'Customization'}</h2>
-                    <p className="mt-1 text-xs text-slate-400">
-                      {settingsPanelView === 'account-settings' ? 'Your account information.' : 'Choose your portal accent color.'}
-                    </p>
+                    <h2 className="truncate text-sm font-semibold text-white">{clientProfile.fullname}</h2>
+                    <p className="truncate text-xs text-slate-400">{clientProfile.email}</p>
                   </div>
-                  <button type="button" onClick={() => setCustomizationOpen(false)} aria-label="Close appearance settings" className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white">
-                    <i data-lucide="x" className="h-4 w-4"></i>
-                  </button>
+                  {settingsPanelView !== 'menu' && (
+                    <button type="button" onClick={() => setSettingsPanelView('menu')} className="shrink-0 text-xs font-medium text-slate-400 transition hover:text-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                      Back
+                    </button>
+                  )}
                 </div>
-                <div className="mb-4 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    aria-pressed={settingsPanelView === 'account-settings'}
-                    onClick={() => setSettingsPanelView('account-settings')}
-                    className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${settingsPanelView === 'account-settings' ? 'bg-amber-500/15 text-amber-300' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-                    Account Settings
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={settingsPanelView === 'customization'}
-                    onClick={() => setSettingsPanelView('customization')}
-                    className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${settingsPanelView === 'customization' ? 'bg-amber-500/15 text-amber-300' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-                    Customization
-                  </button>
-                </div>
-                {settingsPanelView === 'account-settings' ? (
-                  <dl className="grid gap-2 sm:grid-cols-2">
+                {settingsPanelView === 'menu' && (
+                  <div className="space-y-2 p-4">
+                    <button
+                      type="button"
+                      onClick={() => setSettingsPanelView('account-settings')}
+                      className="flex w-full items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-3 text-left transition hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-amber-400">
+                        <circle cx="12" cy="8" r="5" />
+                        <path d="M20 21a8 8 0 0 0-16 0" />
+                      </svg>
+                      <span className="text-sm font-medium text-slate-200">Account Settings</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsPanelView('customization')}
+                      className="flex w-full items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-3 text-left transition hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-amber-400">
+                        <path d="m14 6 7 7-4 4-7-7" />
+                        <path d="M3 21c3-1 5-2 7-5l-3-3c-3 2-4 4-4 8Z" />
+                      </svg>
+                      <span className="text-sm font-medium text-slate-200">Customization</span>
+                    </button>
+                  </div>
+                )}
+                {settingsPanelView === 'account-settings' && (
+                  <dl className="grid gap-2 p-4 sm:grid-cols-2">
                     {[
                       ['Name', clientProfile.fullname],
                       ['Email', clientProfile.email],
@@ -378,8 +456,9 @@ function ClientPortal() {
                       </div>
                     ))}
                   </dl>
-                ) : (
-                  <div className="space-y-2">
+                )}
+                {settingsPanelView === 'customization' && (
+                  <div className="space-y-2 p-4">
                     {CLIENT_THEMES.map((theme) => (
                       <button
                         key={theme.id}
@@ -394,7 +473,11 @@ function ClientPortal() {
                             <span className="mt-0.5 block text-xs text-slate-400">{theme.description}</span>
                           </span>
                         </span>
-                        {clientTheme === theme.id && <i data-lucide="check" className="h-4 w-4 shrink-0 text-amber-300"></i>}
+                        {clientTheme === theme.id && (
+                          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0 text-amber-300">
+                            <path d="m5 12 4 4L19 6" />
+                          </svg>
+                        )}
                       </button>
                     ))}
                     {themeStorageError && (
@@ -402,14 +485,19 @@ function ClientPortal() {
                     )}
                   </div>
                 )}
+                <a
+                  href="logout.php"
+                  className="flex items-center gap-2 border-t border-slate-800 bg-slate-950/40 px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-amber-400">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <path d="m16 17 5-5-5-5" />
+                    <path d="M21 12H9" />
+                  </svg>
+                  Log Out
+                </a>
               </section>
             )}
           </div>
-          <a
-            href="logout.php"
-            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-lg text-sm transition">
-            <i data-lucide="log-out" className="w-4 h-4 text-amber-400"></i> Logout
-          </a>
         </div>
       </header>
 
@@ -751,16 +839,22 @@ function ClientPortal() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
                   <div>
                     <label htmlFor="preferred-attorney" className="block text-xs text-slate-400 mb-1">Preferred Attorney (if any):</label>
-                    <input
+                    <select
                       id="preferred-attorney"
                       name="preferred_attorney"
-                      type="text"
-                      maxLength={150}
-                      placeholder="e.g. Atty. Smith"
+                      aria-describedby="preferred-attorney-help"
                       value={appointmentFormData.preferred_attorney}
                       onChange={(e) => setAppointmentFormData({...appointmentFormData, preferred_attorney: e.target.value})}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-500"
-                    />
+                    >
+                      <option value="" disabled hidden>No preference</option>
+                      {availableAttorneys.map((attorney) => (
+                        <option key={attorney} value={attorney}>{attorney}</option>
+                      ))}
+                    </select>
+                    <p id="preferred-attorney-help" className="mt-1 text-xs text-slate-500">
+                      {availableAttorneys.length > 0 ? 'Choose from attorneys currently registered in the system.' : 'No attorneys are currently available; you can submit without a preference.'}
+                    </p>
 
                     <label className="block text-xs text-slate-400 mt-4 mb-2">Type of Legal Matter (Check one):</label>
                     <div className="space-y-1.5 text-xs text-slate-300">

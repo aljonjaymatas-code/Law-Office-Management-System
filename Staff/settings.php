@@ -59,16 +59,16 @@ staff_layout_start($title, $user, 'settings.php?view=' . $view);
                     type="button"
                     aria-pressed="false"
                     data-staff-theme-option="<?php echo staff_h($themeId); ?>"
-                    class="rounded-xl border border-slate-700 bg-slate-950/50 p-4 text-left transition hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400">
-                    <span class="flex items-center justify-between gap-3">
-                        <span class="flex items-center gap-3">
-                            <span class="h-8 w-8 rounded-full border border-white/20" style="background-color: <?php echo staff_h($color); ?>"></span>
-                            <span>
+                    class="staff-theme-option rounded-xl border border-slate-700 bg-slate-950/50 p-4 text-left transition hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                    <span class="flex items-center justify-between gap-3 w-full">
+                        <span class="flex items-center gap-3 min-w-0">
+                            <span class="staff-theme-color-dot h-8 w-8 rounded-full border border-white/20" style="background-color: <?php echo staff_h($color); ?>"></span>
+                            <span class="min-w-0">
                                 <span class="block text-sm font-semibold text-white"><?php echo staff_h($themeName); ?></span>
                                 <span class="mt-1 block text-xs text-slate-400"><?php echo staff_h($description); ?></span>
                             </span>
                         </span>
-                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hidden h-4 w-4 shrink-0 text-amber-300" data-staff-theme-check>
+                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="staff-theme-check hidden h-4 w-4 shrink-0" data-staff-theme-check>
                             <path d="m5 12 4 4L19 6"></path>
                         </svg>
                     </span>
@@ -95,7 +95,22 @@ staff_layout_start($title, $user, 'settings.php?view=' . $view);
                 });
             };
 
+            const syncHeaderIconTheme = () => {
+                const accent = getComputedStyle(root).getPropertyValue('--portal-accent-400').trim() || '#f59e0b';
+                document.querySelectorAll('.staff-header-icon').forEach((button) => {
+                    button.style.setProperty('--staff-icon-color', accent);
+                    button.style.borderColor = accent;
+                    button.style.color = accent;
+                    button.querySelectorAll('svg, i, path, .lucide').forEach((icon) => {
+                        icon.style.color = accent;
+                        icon.style.stroke = accent;
+                        icon.style.fill = 'none';
+                    });
+                });
+            };
+
             renderSelection(root.dataset.staffTheme || 'amber');
+            syncHeaderIconTheme();
             if (window.STAFF_THEME_STORAGE_ERROR) {
                 errorMessage.classList.remove('hidden');
             }
@@ -106,6 +121,7 @@ staff_layout_start($title, $user, 'settings.php?view=' . $view);
                     root.dataset.staffTheme = theme;
                     errorMessage.classList.add('hidden');
                     renderSelection(theme);
+                    syncHeaderIconTheme();
 
                     try {
                         window.localStorage.setItem(storageKey, theme);

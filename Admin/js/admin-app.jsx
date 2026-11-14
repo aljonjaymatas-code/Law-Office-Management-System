@@ -10,13 +10,17 @@ const currentUser = window.ADMIN_USER;
         function AdminLawyerDashboard() {
           const [userRole, setUserRole] = useState(window.ADMIN_USER_ROLE === 'lawyer' ? 'lawyer' : 'admin');
           const requestedTab = new URLSearchParams(window.location.search).get('tab');
-          const requestedAttorneyTab = ['schedule', 'hours', 'account-settings', 'customization'].includes(requestedTab) ? requestedTab : 'cases';
+          const requestedAttorneyTab = ['overview', 'cases', 'schedule', 'hours', 'transactions', 'document-review', 'account-settings', 'customization'].includes(requestedTab) ? requestedTab : 'cases';
           const [activeTab, setActiveTab] = useState(userRole === 'admin' ? 'overview' : requestedAttorneyTab);
           const [menuOpen, setMenuOpen] = useState(false);
+          const [searchOpen, setSearchOpen] = useState(false);
           const [adminTheme, setAdminTheme] = useState(document.documentElement.dataset.adminTheme || 'amber');
           const [themeStorageError, setThemeStorageError] = useState(Boolean(window.ADMIN_THEME_STORAGE_ERROR));
           const [searchQuery, setSearchQuery] = useState('');
           const searchInputRef = useRef(null);
+          const searchContainerRef = useRef(null);
+          const profileMenuRef = useRef(null);
+          const notificationsContainerRef = useRef(null);
           const [reviewDocuments, setReviewDocuments] = useState(readDocumentSubmissions);
           const [selectedReviewDocumentId, setSelectedReviewDocumentId] = useState(null);
           const [declineMode, setDeclineMode] = useState(false);
@@ -33,8 +37,36 @@ const currentUser = window.ADMIN_USER;
           const timeEntries = Array.isArray(window.ADMIN_TIME_ENTRIES) ? window.ADMIN_TIME_ENTRIES : [];
           const [timeEntryModalOpen, setTimeEntryModalOpen] = useState(Boolean(window.ADMIN_TIME_ENTRY_NOTICE && window.ADMIN_TIME_ENTRY_NOTICE.type === 'error'));
 
+          useEffect(() => {
+            const allowedTabs = userRole === 'admin'
+              ? ['overview', 'users', 'transactions', 'document-review']
+              : ['overview', 'cases', 'schedule', 'hours', 'transactions', 'document-review', 'account-settings', 'customization'];
+            const syncTabFromUrl = () => {
+              const tabFromUrl = new URLSearchParams(window.location.search).get('tab');
+              setActiveTab(allowedTabs.includes(tabFromUrl) ? tabFromUrl : userRole === 'admin' ? 'overview' : 'cases');
+            };
+            window.addEventListener('popstate', syncTabFromUrl);
+            return () => window.removeEventListener('popstate', syncTabFromUrl);
+          }, [userRole]);
+
+          useEffect(() => {
+            const allowedTabs = userRole === 'admin'
+              ? ['overview', 'users', 'transactions', 'document-review']
+              : ['overview', 'cases', 'schedule', 'hours', 'transactions', 'document-review', 'account-settings', 'customization'];
+            if (!allowedTabs.includes(activeTab)) {
+              setActiveTab(userRole === 'admin' ? 'overview' : 'cases');
+              return;
+            }
+            const url = new URL(window.location.href);
+            if (url.searchParams.get('tab') !== activeTab) {
+              url.searchParams.set('tab', activeTab);
+              window.history.pushState({ tab: activeTab }, '', url);
+            }
+          }, [userRole, activeTab]);
+
           const usersList = Array.isArray(window.ADMIN_USERS) ? window.ADMIN_USERS : [];
           const clientRecords = Array.isArray(window.ADMIN_CLIENT_RECORDS) ? window.ADMIN_CLIENT_RECORDS : [];
+          const attorneyClientRecords = Array.isArray(window.ADMIN_ATTORNEY_CLIENT_RECORDS) ? window.ADMIN_ATTORNEY_CLIENT_RECORDS : [];
           const caseRecords = Array.isArray(window.ADMIN_CASE_RECORDS) ? window.ADMIN_CASE_RECORDS : [];
           const pendingAppointments = Array.isArray(window.ADMIN_PENDING_APPOINTMENTS) ? window.ADMIN_PENDING_APPOINTMENTS : [];
           const calendarAppointments = Array.isArray(window.ADMIN_CALENDAR_APPOINTMENTS) ? window.ADMIN_CALENDAR_APPOINTMENTS : [];
@@ -45,8 +77,43 @@ const currentUser = window.ADMIN_USER;
             totalBillableHoursYTD: `${Number(window.ADMIN_TOTAL_BILLABLE_HOURS_YTD || 0).toFixed(2)} hrs`,
             totalClients: window.ADMIN_TOTAL_CLIENTS
           };
+          const attorneyReportingData = window.ADMIN_ATTORNEY_REPORTING || {};
+          const attorneyReporting = {
+            totalCases: Number(attorneyReportingData.totalCases || 0),
+            pendingAppointments: Number(attorneyReportingData.pendingAppointments || 0),
+            totalBillableHoursYTD: `${Number(attorneyReportingData.totalBillableHoursYTD || 0).toFixed(2)} hrs`,
+            totalClients: Number(attorneyReportingData.totalClients || 0)
+          };
 
           const assignedCases = caseRecords.filter((legalCase) => legalCase.lawyer_name);
+          const caseStatusSummary = ['Active', 'Pending', 'Closed', 'Other'].map((status) => ({
+            status,
+            count: assignedCases.filter((legalCase) => {
+              const caseStatus = String(legalCase.status).toLowerCase();
+              return status === 'Other'
+                ? !['active', 'pending', 'closed'].includes(caseStatus)
+                : caseStatus === status.toLowerCase();
+            }).length
+          }));
+          const maxCaseStatusCount = Math.max(...caseStatusSummary.map((item) => item.count), 1);
+          const billableMonthSummary = Array.from({ length: 6 }, (_, index) => {
+            const date = new Date();
+            date.setDate(1);
+            date.setMonth(date.getMonth() - (5 - index));
+            const year = date.getFullYear();
+            const month = date.getMonth();
+            const hours = timeEntries.reduce((total, entry) => {
+              const loggedDate = new Date(`${String(entry.date_logged).slice(0, 10)}T00:00:00`);
+              return loggedDate.getFullYear() === year && loggedDate.getMonth() === month
+                ? total + Number(entry.hours || 0)
+                : total;
+            }, 0);
+            return { label: date.toLocaleString(undefined, { month: 'short' }), hours };
+          });
+          const maxMonthlyHours = Math.max(...billableMonthSummary.map((month) => month.hours), 1);
+          const billableChartPoints = billableMonthSummary.map((month, index) => (
+            `${20 + index * 112},${150 - (month.hours / maxMonthlyHours) * 120}`
+          )).join(' ');
 
           const masterCalendarAppointments = [
             ...calendarAppointments
@@ -131,7 +198,7 @@ const currentUser = window.ADMIN_USER;
             if (window.lucide) {
               window.lucide.createIcons();
             }
-          }, [userRole, activeTab, menuOpen, reviewDocuments, appointmentRequests, notificationsOpen, notifications, timeEntryModalOpen, timeEntries]);
+          }, [userRole, activeTab, menuOpen, searchOpen, reviewDocuments, appointmentRequests, notificationsOpen, notifications, timeEntryModalOpen, timeEntries]);
 
           useEffect(() => {
             const syncDocumentSubmissions = (event) => {
@@ -183,12 +250,65 @@ const currentUser = window.ADMIN_USER;
             const handleSearchShortcut = (event) => {
               if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
                 event.preventDefault();
-                searchInputRef.current?.focus();
+                setSearchOpen(true);
               }
             };
             window.addEventListener('keydown', handleSearchShortcut);
             return () => window.removeEventListener('keydown', handleSearchShortcut);
           }, []);
+
+          useEffect(() => {
+            if (searchOpen) searchInputRef.current?.focus();
+          }, [searchOpen]);
+
+          useEffect(() => {
+            if (!searchOpen) return undefined;
+            const closeSearch = (event) => {
+              if (event.type === 'keydown' && event.key === 'Escape') {
+                setSearchOpen(false);
+              } else if (event.type === 'pointerdown' && !searchContainerRef.current?.contains(event.target)) {
+                setSearchOpen(false);
+              }
+            };
+            document.addEventListener('pointerdown', closeSearch);
+            window.addEventListener('keydown', closeSearch);
+            return () => {
+              document.removeEventListener('pointerdown', closeSearch);
+              window.removeEventListener('keydown', closeSearch);
+            };
+          }, [searchOpen]);
+
+          useEffect(() => {
+            if (!notificationsOpen) return undefined;
+            const closeNotifications = (event) => {
+              if (event.type === 'keydown' && event.key === 'Escape') {
+                setNotificationsOpen(false);
+              } else if (event.type === 'pointerdown' && !notificationsContainerRef.current?.contains(event.target)) {
+                setNotificationsOpen(false);
+              }
+            };
+            document.addEventListener('pointerdown', closeNotifications);
+            window.addEventListener('keydown', closeNotifications);
+            return () => {
+              document.removeEventListener('pointerdown', closeNotifications);
+              window.removeEventListener('keydown', closeNotifications);
+            };
+          }, [notificationsOpen]);
+
+          useEffect(() => {
+            if (!menuOpen || userRole !== 'lawyer') return undefined;
+            const closeProfileMenu = (event) => {
+              const isEscape = event.type === 'keydown' && event.key === 'Escape';
+              const isOutsideClick = event.type === 'pointerdown' && !profileMenuRef.current?.contains(event.target);
+              if (isEscape || isOutsideClick) setMenuOpen(false);
+            };
+            document.addEventListener('pointerdown', closeProfileMenu);
+            window.addEventListener('keydown', closeProfileMenu);
+            return () => {
+              document.removeEventListener('pointerdown', closeProfileMenu);
+              window.removeEventListener('keydown', closeProfileMenu);
+            };
+          }, [menuOpen, userRole]);
 
           useEffect(() => {
             if (!selectedReviewDocumentId) return undefined;
@@ -420,68 +540,94 @@ const currentUser = window.ADMIN_USER;
             <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-950 via-[#030712] to-black text-slate-100 flex flex-col">
               
               {/* Header with navigation, branding, and search */}
-              <header className="bg-slate-900/90 backdrop-blur-md border-b border-amber-500/20 px-6 py-4 flex flex-wrap items-center gap-4 shadow-lg sticky top-0 z-50">
-                <div className="flex min-w-0 flex-row flex-wrap items-center gap-4">
-                  <button
-                    type="button"
-                    aria-label="Open navigation menu"
-                    aria-expanded={menuOpen}
-                    aria-controls="admin-navigation-drawer"
-                    onClick={() => setMenuOpen(!menuOpen)}
-                    className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm text-slate-200 transition hover:border-amber-500/50 hover:text-white">
-                    <i data-lucide="menu" className="h-4 w-4 text-amber-400"></i>
-                    
-                  </button>
+              <header className="bg-slate-900/90 backdrop-blur-md border-b border-amber-500/20 px-4 py-4 shadow-lg sticky top-0 z-50 sm:px-6 lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-4">
+                <div className="flex min-w-0 items-center">
                   <button
                     type="button"
                     onClick={() => window.location.reload()}
                     aria-label="Refresh dashboard"
-                    className="flex items-center space-x-3 text-left">
-                    <div className="p-2 bg-gradient-to-br from-amber-500 to-amber-700 rounded-lg text-slate-950 gold-glow-sm">
-                      <i data-lucide="scale" className="w-6 h-6"></i>
-                    </div>
-                    <div>
-                      <span className="font-bold text-lg tracking-wide text-white">Law Office Management System</span>
-                      <span className="block text-xs text-amber-400 font-semibold tracking-wider">ADMIN & ATTORNEY DASHBOARD</span>
-                    </div>
+                    className="flex items-center gap-3 text-left">
+                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 text-slate-950 gold-glow-sm">
+                      <i data-lucide="scale" className="h-6 w-6"></i>
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-base font-bold tracking-wide text-white sm:text-lg">Law Office Management System</span>
+                      <span className="block text-xs font-semibold tracking-wider text-amber-400">{userRole === 'admin' ? 'ADMIN DASHBOARD' : 'ATTORNEY WORKSPACE'}</span>
+                    </span>
                   </button>
                 </div>
-                <div className="relative z-20 flex w-full min-w-0 items-center gap-3 md:ml-auto md:w-[min(38rem,48vw)]">
-                  <div className="relative min-w-0 flex-1">
-                  <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 shadow-lg transition focus-within:border-amber-500/60 focus-within:ring-1 focus-within:ring-amber-500/30">
-                    <i data-lucide="search" className="h-5 w-5 shrink-0 text-amber-400"></i>
-                    <input
-                      ref={searchInputRef}
-                      type="search"
-                      value={searchQuery}
-                      onChange={(event) => setSearchQuery(event.target.value)}
-                      placeholder="Search clients, cases, documents, case numbers, or dates..."
-                      aria-label="Search clients, cases, court dates, documents, time entries, and users"
-                      aria-controls="admin-search-results"
-                      className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
-                    />
-                    <span className="hidden shrink-0 rounded border border-slate-700 bg-[#262626] px-2 py-1 text-[11px] text-[#d4af37] sm:inline">Ctrl K</span>
-                  </div>
-                  {searchTokens.length > 0 && (
-                    <div id="admin-search-results" className="absolute left-0 right-0 top-full mt-2 max-h-72 overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 p-2 shadow-2xl">
-                      {searchResults.length ? searchResults.map((result) => (
-                        <button
-                          key={result.id}
-                          type="button"
-                          onClick={() => { setUserRole(result.role); setActiveTab(result.tab); }}
-                          className="flex w-full items-center justify-between gap-4 rounded-lg px-3 py-2.5 text-left transition hover:bg-slate-800"
-                        >
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-medium text-white">{result.title}</span>
-                            <span className="block truncate text-xs text-slate-400">{result.details}</span>
-                          </span>
-                          <span className="shrink-0 text-[11px] text-amber-400">{result.type}</span>
-                        </button>
-                      )) : <p className="px-3 py-4 text-sm text-slate-400">No matching records found.</p>}
+                {userRole === 'lawyer' && (
+                  <nav aria-label="Attorney dashboard" className="order-3 flex w-full flex-wrap items-center gap-1 lg:order-none lg:col-start-2 lg:w-auto lg:justify-self-center">
+                    {[
+                      { tab: 'overview', label: 'Overview' },
+                      { tab: 'cases', label: 'Cases' },
+                      { tab: 'schedule', label: 'Court Calendar' },
+                      { tab: 'hours', label: 'Billable Hours' }
+                    ].map((item) => (
+                      <button
+                        key={item.tab}
+                        type="button"
+                        onClick={() => setActiveTab(item.tab)}
+                        aria-current={activeTab === item.tab ? 'page' : undefined}
+                        className={`rounded-lg px-3 py-2 text-sm font-medium transition sm:px-4 ${activeTab === item.tab ? 'bg-amber-500/10 text-amber-300' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </nav>
+                )}
+                <div className="relative z-20 ml-auto flex shrink-0 items-center gap-2 sm:gap-3 lg:col-start-3 lg:ml-0 lg:justify-self-end">
+                  <div ref={searchContainerRef} className="relative shrink-0">
+                    <button
+                      type="button"
+                      aria-label={searchOpen ? 'Close search' : 'Open search'}
+                      aria-expanded={searchOpen}
+                      aria-controls="admin-search-panel"
+                      onClick={() => setSearchOpen((open) => !open)}
+                      className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-950/80 text-amber-400 shadow-lg transition hover:border-amber-500/60 hover:bg-slate-900"
+                    >
+                      <i data-lucide={searchOpen ? 'x' : 'search'} className="h-5 w-5"></i>
+                    </button>
+                    <div
+                      id="admin-search-panel"
+                      aria-hidden={!searchOpen}
+                      className={`absolute right-full top-1/2 mr-3 w-[min(24rem,calc(100vw-8rem))] -translate-y-1/2 transition-[opacity,transform,visibility] duration-200 ease-out ${searchOpen ? 'visible translate-x-0 opacity-100' : 'invisible translate-x-4 opacity-0 pointer-events-none'}`}
+                    >
+                      <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 shadow-lg transition focus-within:border-amber-500/60 focus-within:ring-1 focus-within:ring-amber-500/30">
+                        <i data-lucide="search" className="h-5 w-5 shrink-0 text-amber-400"></i>
+                        <input
+                          ref={searchInputRef}
+                          type="search"
+                          value={searchQuery}
+                          onChange={(event) => setSearchQuery(event.target.value)}
+                          placeholder="Search clients, cases, documents, case numbers, or dates..."
+                          aria-label="Search clients, cases, court dates, documents, time entries, and users"
+                          aria-controls="admin-search-results"
+                          className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                        />
+                        <span className="hidden shrink-0 rounded border border-slate-700 bg-[#262626] px-2 py-1 text-[11px] text-[#d4af37] sm:inline">Ctrl K</span>
+                      </div>
+                      {searchTokens.length > 0 && (
+                        <div id="admin-search-results" className="mt-2 max-h-72 overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 p-2 shadow-2xl">
+                          {searchResults.length ? searchResults.map((result) => (
+                            <button
+                              key={result.id}
+                              type="button"
+                              onClick={() => { setUserRole(result.role); setActiveTab(result.tab); setSearchOpen(false); }}
+                              className="flex w-full items-center justify-between gap-4 rounded-lg px-3 py-2.5 text-left transition hover:bg-slate-800"
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-medium text-white">{result.title}</span>
+                                <span className="block truncate text-xs text-slate-400">{result.details}</span>
+                              </span>
+                              <span className="shrink-0 text-[11px] text-amber-400">{result.type}</span>
+                            </button>
+                          )) : <p className="px-3 py-4 text-sm text-slate-400">No matching records found.</p>}
+                        </div>
+                      )}
                     </div>
-                  )}
                   </div>
-                  <div className="relative shrink-0">
+                  <div ref={notificationsContainerRef} className="relative shrink-0">
                     <button
                       type="button"
                       aria-label={`Notifications${notifications.filter((notification) => notification.audience === 'attorney' && !notification.read).length ? `, ${notifications.filter((notification) => notification.audience === 'attorney' && !notification.read).length} unread` : ''}`}
@@ -518,10 +664,88 @@ const currentUser = window.ADMIN_USER;
                       </div>
                     )}
                   </div>
+                  <div ref={profileMenuRef} className="relative shrink-0">
+                    <button
+                      type="button"
+                      aria-label={userRole === 'lawyer' ? 'Open profile menu' : 'Open navigation menu'}
+                      aria-expanded={menuOpen}
+                      aria-controls={userRole === 'lawyer' ? 'attorney-profile-menu' : 'admin-navigation-drawer'}
+                      onClick={() => setMenuOpen((open) => !open)}
+                      className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-amber-500/60 bg-amber-500/5 text-amber-400 shadow-lg transition hover:bg-amber-500/10"
+                    >
+                      <i data-lucide="user-round" className="h-5 w-5"></i>
+                    </button>
+                    {userRole === 'lawyer' && menuOpen && (
+                      <section
+                        id="attorney-profile-menu"
+                        aria-label="Attorney profile menu"
+                        className="absolute right-0 top-full z-[60] mt-3 flex max-h-[calc(100vh-5rem)] w-[min(20rem,calc(100vw-2rem))] flex-col overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 text-left shadow-2xl"
+                      >
+                        <div className="flex items-center gap-3 border-b border-slate-800 px-4 py-4">
+                          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-500/60 bg-slate-900 text-amber-400">
+                            <i data-lucide="user-round" className="h-5 w-5"></i>
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold text-white">{currentUser.name}</span>
+                            <span className="block text-xs text-amber-400">{currentUser.roleLabel}</span>
+                            <span className="block truncate text-[11px] text-slate-400">{currentUser.email}</span>
+                          </span>
+                        </div>
+                        <nav className="space-y-1 p-2" aria-label="Attorney navigation">
+                          {[
+                            { tab: 'overview', label: 'Overview', icon: 'layout-dashboard' },
+                            { tab: 'cases', label: 'Assigned Legal Cases', icon: 'briefcase-business' },
+                            { tab: 'schedule', label: 'Court Calendar', icon: 'calendar-days' },
+                            { tab: 'hours', label: 'Billable Hours', icon: 'clock-3' },
+                            { tab: 'transactions', label: 'Transaction History & Tracking', icon: 'history' },
+                            { tab: 'document-review', label: 'Review File', icon: 'file-check-2' }
+                          ].map((item) => (
+                            <button
+                              key={item.tab}
+                              type="button"
+                              aria-current={activeTab === item.tab ? 'page' : undefined}
+                              onClick={() => { setActiveTab(item.tab); setMenuOpen(false); }}
+                              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${activeTab === item.tab ? 'bg-amber-500/15 text-amber-300' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
+                            >
+                              <i data-lucide={item.icon} className="h-4 w-4 shrink-0"></i>
+                              <span>{item.label}</span>
+                            </button>
+                          ))}
+                        </nav>
+                        <nav className="space-y-1 border-t border-slate-800 p-2" aria-label="Account settings">
+                          {[
+                            { tab: 'account-settings', label: 'Account Settings', icon: 'settings' },
+                            { tab: 'customization', label: 'Customization', icon: 'paintbrush' }
+                          ].map((item) => (
+                            <button
+                              key={item.tab}
+                              type="button"
+                              aria-current={activeTab === item.tab ? 'page' : undefined}
+                              onClick={() => { setActiveTab(item.tab); setMenuOpen(false); }}
+                              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${activeTab === item.tab ? 'bg-amber-500/15 text-amber-300' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
+                            >
+                              <i data-lucide={item.icon} className="h-4 w-4 shrink-0"></i>
+                              <span>{item.label}</span>
+                            </button>
+                          ))}
+                        </nav>
+                        <footer className="border-t border-slate-800 p-2">
+                          <button
+                            type="button"
+                            onClick={handleLogout}
+                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-red-300 transition hover:bg-red-500/10 hover:text-red-200"
+                          >
+                            <i data-lucide="log-out" className="h-4 w-4"></i>
+                            Log Out
+                          </button>
+                        </footer>
+                      </section>
+                    )}
+                  </div>
                 </div>
               </header>
 
-              <div className={`fixed inset-0 z-[60] transition ${menuOpen ? 'visible' : 'invisible pointer-events-none'}`}>
+              {userRole === 'admin' && <div className={`fixed inset-0 z-[60] transition ${menuOpen ? 'visible' : 'invisible pointer-events-none'}`}>
                 <button
                   type="button"
                   aria-label="Close navigation menu"
@@ -606,12 +830,12 @@ const currentUser = window.ADMIN_USER;
                     </button>
                   </div>
                 </aside>
-              </div>
+              </div>}
 
               {/* Main Workspace Area */}
-              <main className="max-w-7xl w-full mx-auto p-6 space-y-6 flex-grow">
+              <main className={`w-full mx-auto p-6 space-y-6 flex-grow ${userRole === 'lawyer' ? 'max-w-[1600px]' : 'max-w-7xl'}`}>
                 {/* Banner & Tab Navigator */}
-                <div className="bg-gradient-to-r from-blue-900/40 via-slate-900/80 to-slate-900/90 border border-amber-500/30 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xl backdrop-blur-md">
+                {userRole === 'admin' && <div className="bg-gradient-to-r from-blue-900/40 via-slate-900/80 to-slate-900/90 border border-amber-500/30 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xl backdrop-blur-md">
                   <div>
                     <h2 className="text-2xl font-bold text-white tracking-wide">
                       {userRole === 'admin' ? 'Administrator / Managing Partner Dashboard' : 'Lawyer / Attorney Workspace'}
@@ -630,7 +854,7 @@ const currentUser = window.ADMIN_USER;
                       <button onClick={() => setActiveTab('hours')} className={`px-4 py-2 rounded-xl text-xs font-semibold transition ${activeTab === 'hours' ? 'bg-amber-500 text-slate-950 gold-glow-sm' : 'bg-slate-800 text-slate-300 border border-slate-700'}`}>Billable Hours</button>
                     </div>
                   )}
-                </div>
+                </div>}
 
                 {/* --- ADMIN VIEWS --- */}
                 {userRole === 'admin' && activeTab === 'overview' && (
@@ -666,6 +890,34 @@ const currentUser = window.ADMIN_USER;
                         {window.ADMIN_APPOINTMENT_NOTICE.message}
                       </p>
                     )}
+
+                    <section className="overflow-hidden rounded-2xl border border-amber-500/20 bg-slate-900/80 shadow-xl">
+                      <div className="border-b border-slate-800 p-5">
+                        <h3 className="font-bold text-white text-base">Clients per Assigned Attorney</h3>
+                        <p className="mt-1 text-sm text-slate-400">Distinct clients with at least one case assigned to each attorney.</p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[520px] text-left text-sm text-slate-300">
+                          <thead className="bg-slate-950/60 text-xs uppercase text-amber-400/80">
+                            <tr>
+                              <th className="p-4">Attorney</th>
+                              <th className="p-4">Total Clients</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/60">
+                            {attorneyClientRecords.map((attorney) => (
+                              <tr key={attorney.user_id} className="hover:bg-slate-800/40">
+                                <td className="p-4 font-semibold text-white">{attorney.attorney_name}</td>
+                                <td className="p-4 font-mono text-amber-300">{Number(attorney.total_clients)}</td>
+                              </tr>
+                            ))}
+                            {attorneyClientRecords.length === 0 && (
+                              <tr><td colSpan="2" className="p-6 text-center text-slate-400">No attorney accounts are registered.</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
 
                     <section className="overflow-hidden rounded-2xl border border-amber-500/20 bg-slate-900/80 shadow-xl">
                       <div className="border-b border-slate-800 p-5">
@@ -1095,25 +1347,150 @@ const currentUser = window.ADMIN_USER;
                 })()}
 
                 {/* --- LAWYER VIEWS --- */}
+                {userRole === 'lawyer' && activeTab === 'overview' && (
+                  <div className="animate-fade-in space-y-6">
+                    <div className="grid gap-5 lg:grid-cols-[minmax(15rem,0.8fr)_minmax(0,1.8fr)]">
+                      <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl">
+                        <div className="mb-5 flex items-start justify-between gap-3">
+                          <div>
+                            <h2 className="font-semibold text-white">Assigned Case Status</h2>
+                            <p className="mt-1 text-xs text-slate-400">{assignedCases.length} assigned matters</p>
+                          </div>
+                          <i data-lucide="briefcase-business" className="h-5 w-5 text-amber-400"></i>
+                        </div>
+                        <div className="space-y-4">
+                          {caseStatusSummary.map((item) => (
+                            <div key={item.status}>
+                              <div className="mb-1.5 flex items-center justify-between text-xs">
+                                <span className="text-slate-300">{item.status}</span>
+                                <span className="font-semibold text-white">{item.count}</span>
+                              </div>
+                              <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+                                <div
+                                  className={`h-full rounded-full ${item.status === 'Active' ? 'bg-emerald-400' : item.status === 'Pending' ? 'bg-amber-400' : item.status === 'Closed' ? 'bg-sky-400' : 'bg-slate-500'}`}
+                                  style={{ width: `${(item.count / maxCaseStatusCount) * 100}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl">
+                        <div className="mb-3 flex items-start justify-between gap-3">
+                          <div>
+                            <h2 className="font-semibold text-white">Billable Hours</h2>
+                            <p className="mt-1 text-xs text-slate-400">Monthly hours · last six months</p>
+                          </div>
+                          <span className="rounded-lg bg-amber-500/10 px-3 py-1.5 text-sm font-bold text-amber-300">{attorneyReporting.totalBillableHoursYTD}</span>
+                        </div>
+                        <svg viewBox="0 0 600 180" role="img" aria-label="Monthly billable hours for the last six months" className="h-44 w-full overflow-visible">
+                          {[30, 70, 110, 150].map((y) => (
+                            <line key={y} x1="20" y1={y} x2="580" y2={y} stroke="#263248" strokeDasharray="4 6"></line>
+                          ))}
+                          <polyline points={billableChartPoints} fill="none" stroke="var(--portal-accent-500)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"></polyline>
+                          {billableMonthSummary.map((month, index) => {
+                            const x = 20 + index * 112;
+                            const y = 150 - (month.hours / maxMonthlyHours) * 120;
+                            return (
+                              <g key={`${month.label}-${index}`}>
+                                <circle cx={x} cy={y} r="5" fill="var(--portal-accent-500)" stroke="#0f172a" strokeWidth="3">
+                                  <title>{month.label}: {month.hours.toFixed(2)} hours</title>
+                                </circle>
+                                <text x={x} y="174" textAnchor="middle" fill="#94a3b8" fontSize="12">{month.label}</text>
+                              </g>
+                            );
+                          })}
+                        </svg>
+                      </section>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                      {[
+                        { label: 'Legal Cases', value: attorneyReporting.totalCases },
+                        { label: 'Pending Appointments', value: attorneyReporting.pendingAppointments },
+                        { label: 'Billable Hours YTD', value: attorneyReporting.totalBillableHoursYTD },
+                        { label: 'Total Clients', value: attorneyReporting.totalClients }
+                      ].map((metric) => (
+                        <section key={metric.label} className="flex min-h-36 flex-col rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-lg">
+                          <p className="text-left text-xs font-medium text-slate-400">{metric.label}</p>
+                          <div className="flex flex-1 items-center justify-center">
+                            <p className="truncate text-2xl font-bold text-white">{metric.value}</p>
+                          </div>
+                        </section>
+                      ))}
+                    </div>
+
+                    <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl">
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 p-5">
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('cases')}
+                            className="text-left font-bold text-white transition hover:text-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                          >
+                            Assigned Legal Cases
+                          </button>
+                          <p className="mt-1 text-xs text-slate-400">Recently filed matters assigned to you</p>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[620px] text-left text-sm text-slate-300">
+                          <thead className="bg-slate-950/60 text-xs uppercase tracking-wide text-amber-400">
+                            <tr><th className="px-5 py-3">Case #</th><th className="px-5 py-3">Title</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Filed Date</th></tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/80">
+                            {assignedCases.filter(matchesSearch).slice(0, 5).map((legalCase) => (
+                              <tr
+                                key={legalCase.case_id}
+                                role="link"
+                                tabIndex={0}
+                                onClick={() => setActiveTab('cases')}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    setActiveTab('cases');
+                                  }
+                                }}
+                                className="cursor-pointer transition hover:bg-slate-800/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-amber-400"
+                              >
+                                <td className="whitespace-nowrap px-5 py-4 font-mono text-amber-300">{legalCase.case_number}</td>
+                                <td className="px-5 py-4 font-medium text-white">{legalCase.title}</td>
+                                <td className="px-5 py-4">
+                                  <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-200">{legalCase.status}</span>
+                                </td>
+                                <td className="whitespace-nowrap px-5 py-4 text-slate-400">{legalCase.filed_date}</td>
+                              </tr>
+                            ))}
+                            {assignedCases.filter(matchesSearch).length === 0 && (
+                              <tr><td colSpan="4" className="px-5 py-8 text-center text-slate-400">{assignedCases.length === 0 ? 'No assigned legal cases found.' : 'No matching cases.'}</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  </div>
+                )}
+
                 {userRole === 'lawyer' && activeTab === 'cases' && (
                   <div className="space-y-6 animate-fade-in">
                     <div className="flex justify-center">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full max-w-5xl">
                         <div className="bg-slate-900/80 border border-amber-500/20 p-5 rounded-2xl shadow-lg">
                           <p className="text-xs uppercase text-slate-400 font-semibold">Legal Cases</p>
-                          <p className="text-3xl font-extrabold text-white mt-2 font-mono">{firmReporting.totalCases}</p>
+                          <p className="text-3xl font-extrabold text-white mt-2 font-mono">{attorneyReporting.totalCases}</p>
                         </div>
                         <div className="bg-slate-900/80 border border-amber-500/20 p-5 rounded-2xl shadow-lg">
                           <p className="text-xs uppercase text-slate-400 font-semibold">Pending Appointments</p>
-                          <p className="text-3xl font-extrabold text-white mt-2 font-mono">{firmReporting.pendingAppointments}</p>
+                          <p className="text-3xl font-extrabold text-white mt-2 font-mono">{attorneyReporting.pendingAppointments}</p>
                         </div>
                         <div className="bg-slate-900/80 border border-amber-500/20 p-5 rounded-2xl shadow-lg">
                           <p className="text-xs uppercase text-slate-400 font-semibold">Billable Hours (YTD)</p>
-                          <p className="text-3xl font-extrabold text-white mt-2 font-mono">{firmReporting.totalBillableHoursYTD}</p>
+                          <p className="text-3xl font-extrabold text-white mt-2 font-mono">{attorneyReporting.totalBillableHoursYTD}</p>
                         </div>
                         <div className="bg-slate-900/80 border border-amber-500/20 p-5 rounded-2xl shadow-lg">
                           <p className="text-xs uppercase text-slate-400 font-semibold">Total Clients</p>
-                          <p className="text-3xl font-extrabold text-amber-300 mt-2 font-mono">{firmReporting.totalClients}</p>
+                          <p className="text-3xl font-extrabold text-amber-300 mt-2 font-mono">{attorneyReporting.totalClients}</p>
                         </div>
                       </div>
                     </div>
@@ -1375,7 +1752,11 @@ const currentUser = window.ADMIN_USER;
                                 <span className="mt-1 block text-xs text-slate-400">{theme.description}</span>
                               </span>
                             </span>
-                            {adminTheme === theme.id && <i data-lucide="check" className="h-4 w-4 shrink-0 text-amber-300"></i>}
+                            {adminTheme === theme.id && (
+                              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0 text-amber-300">
+                                <path d="m5 12 4 4L19 6" />
+                              </svg>
+                            )}
                           </span>
                         </button>
                       ))}

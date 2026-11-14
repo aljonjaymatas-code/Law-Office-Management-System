@@ -10,7 +10,7 @@ if (!in_array($userRole, ['admin', 'lawyer'], true) || empty($_SESSION['admin_po
     exit;
 }
 
-$statement = $pdo->prepare('SELECT TOP (1) username, email, role FROM users WHERE user_id = :user_id');
+$statement = $pdo->prepare('SELECT TOP (1) user_id, username, email, role FROM users WHERE user_id = :user_id');
 $statement->execute(['user_id' => (int) $_SESSION['admin_portal_user_id']]);
 $account = $statement->fetch();
 
@@ -182,24 +182,44 @@ $calendarAppointmentsStatement = $pdo->query(
      ORDER BY a.appointment_date ASC, a.appointment_id ASC"
 );
 $calendarAppointments = $calendarAppointmentsStatement->fetchAll();
-$caseRecordsStatement = $pdo->query(
+$caseRecordsQuery =
     "SELECT c.case_id, c.case_number, c.title, c.status, c.filed_date,
             cl.fullname AS client_name,
             COALESCE(NULLIF(c.assigned_lawyer_name, ''), u.username) AS lawyer_name
      FROM cases c
      LEFT JOIN clients cl ON cl.client_id = c.client_id
-     LEFT JOIN users u ON u.user_id = c.assigned_lawyer_id
-     ORDER BY c.filed_date DESC, c.case_id DESC"
-);
+     LEFT JOIN users u ON u.user_id = c.assigned_lawyer_id";
+$caseRecordsParams = [];
+if ($userRole === 'lawyer') {
+    $caseRecordsQuery .=
+        ' WHERE c.assigned_lawyer_id = :user_id
+          OR (
+              c.assigned_lawyer_id IS NULL
+              AND LOWER(LTRIM(RTRIM(c.assigned_lawyer_name))) = LOWER(LTRIM(RTRIM(:username)))
+          )';
+    $caseRecordsParams = [
+        'user_id' => (int) $account['user_id'],
+        'username' => (string) $account['username'],
+    ];
+}
+$caseRecordsQuery .= ' ORDER BY c.filed_date DESC, c.case_id DESC';
+$caseRecordsStatement = $pdo->prepare($caseRecordsQuery);
+$caseRecordsStatement->execute($caseRecordsParams);
 $caseRecords = $caseRecordsStatement->fetchAll();
-$timeEntriesStatement = $pdo->query(
+$timeEntriesQuery =
     'SELECT t.time_entry_id, t.hours, t.description, t.date_logged,
             c.case_number, c.title AS case_title, u.username AS logged_by
      FROM time_entries t
      INNER JOIN cases c ON c.case_id = t.case_id
-     LEFT JOIN users u ON u.user_id = t.user_id
-     ORDER BY t.date_logged DESC, t.time_entry_id DESC'
-);
+     LEFT JOIN users u ON u.user_id = t.user_id';
+$timeEntriesParams = [];
+if ($userRole === 'lawyer') {
+    $timeEntriesQuery .= ' WHERE t.user_id = :user_id';
+    $timeEntriesParams['user_id'] = (int) $account['user_id'];
+}
+$timeEntriesQuery .= ' ORDER BY t.date_logged DESC, t.time_entry_id DESC';
+$timeEntriesStatement = $pdo->prepare($timeEntriesQuery);
+$timeEntriesStatement->execute($timeEntriesParams);
 $timeEntries = $timeEntriesStatement->fetchAll();
 $totalBillableHoursYtd = (float) $pdo->query(
     'SELECT COALESCE(SUM(hours), 0) FROM time_entries WHERE YEAR(date_logged) = YEAR(GETDATE())'
@@ -217,6 +237,82 @@ $clientRecordsStatement = $pdo->query(
      ORDER BY c.fullname ASC, c.client_id ASC"
 );
 $clientRecords = $clientRecordsStatement->fetchAll();
+$attorneyClientRecordsStatement = $pdo->query(
+    "SELECT u.user_id, u.username AS attorney_name,
+            COUNT(DISTINCT c.client_id) AS total_clients
+     FROM users u
+     LEFT JOIN cases c
+       ON c.assigned_lawyer_id = u.user_id
+       OR (
+           c.assigned_lawyer_id IS NULL
+           AND LOWER(LTRIM(RTRIM(c.assigned_lawyer_name))) = LOWER(LTRIM(RTRIM(u.username)))
+       )
+     WHERE LOWER(TRIM(u.role)) IN ('lawyer', 'attorney')
+     GROUP BY u.user_id, u.username
+     ORDER BY u.username ASC"
+);
+$attorneyClientRecords = $attorneyClientRecordsStatement->fetchAll();
+$attorneyReporting = [
+    'totalCases' => 0,
+    'pendingAppointments' => 0,
+    'totalBillableHoursYTD' => 0,
+    'totalClients' => 0,
+];
+if ($userRole === 'lawyer') {
+    $attorneyReporting['totalCases'] = count($caseRecords);
+
+    $attorneyAppointmentCount = $pdo->prepare(
+        "SELECT COUNT(*)
+         FROM appointments a
+         WHERE a.status = 'Pending'
+           AND (
+               LOWER(LTRIM(RTRIM(COALESCE(a.preferred_attorney, '')))) IN (:username, :email)
+               OR EXISTS (
+                   SELECT 1
+                   FROM cases assigned_case
+                   WHERE assigned_case.case_id = a.case_id
+                     AND (
+                         assigned_case.assigned_lawyer_id = :user_id
+                         OR (
+                             assigned_case.assigned_lawyer_id IS NULL
+                             AND LOWER(LTRIM(RTRIM(assigned_case.assigned_lawyer_name))) = LOWER(LTRIM(RTRIM(:legacy_username)))
+                         )
+                     )
+               )
+           )"
+    );
+    $attorneyAppointmentCount->execute([
+        'username' => strtolower((string) $account['username']),
+        'email' => strtolower((string) $account['email']),
+        'user_id' => (int) $account['user_id'],
+        'legacy_username' => (string) $account['username'],
+    ]);
+    $attorneyReporting['pendingAppointments'] = (int) $attorneyAppointmentCount->fetchColumn();
+
+    $attorneyHours = $pdo->prepare(
+        'SELECT COALESCE(SUM(hours), 0)
+         FROM time_entries
+         WHERE user_id = :user_id
+           AND YEAR(date_logged) = YEAR(GETDATE())'
+    );
+    $attorneyHours->execute(['user_id' => (int) $account['user_id']]);
+    $attorneyReporting['totalBillableHoursYTD'] = (float) $attorneyHours->fetchColumn();
+
+    $attorneyClientCount = $pdo->prepare(
+        'SELECT COUNT(DISTINCT client_id)
+         FROM cases
+         WHERE assigned_lawyer_id = :user_id
+            OR (
+                assigned_lawyer_id IS NULL
+                AND LOWER(LTRIM(RTRIM(assigned_lawyer_name))) = LOWER(LTRIM(RTRIM(:username)))
+            )'
+    );
+    $attorneyClientCount->execute([
+        'user_id' => (int) $account['user_id'],
+        'username' => (string) $account['username'],
+    ]);
+    $attorneyReporting['totalClients'] = (int) $attorneyClientCount->fetchColumn();
+}
 if ($userRole === 'admin') {
     $usersStatement = $pdo->query(
         'SELECT user_id, username, email, role, CAST(created_at AS date) AS created_at FROM users ORDER BY user_id ASC'
@@ -274,7 +370,9 @@ if ($userRole === 'admin') {
         window.ADMIN_TOTAL_BILLABLE_HOURS_YTD = <?php echo json_encode($totalBillableHoursYtd); ?>;
         window.ADMIN_CASE_RECORDS = <?php echo json_encode($caseRecords, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
         window.ADMIN_TOTAL_CLIENTS = <?php echo json_encode($totalClients); ?>;
+        window.ADMIN_ATTORNEY_REPORTING = <?php echo json_encode($attorneyReporting); ?>;
         window.ADMIN_CLIENT_RECORDS = <?php echo json_encode($clientRecords, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+        window.ADMIN_ATTORNEY_CLIENT_RECORDS = <?php echo json_encode($attorneyClientRecords, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
     </script>
     <script src="js/admin-storage.js"></script>
     <script type="text/babel" src="js/admin-app.jsx?v=19"></script>
