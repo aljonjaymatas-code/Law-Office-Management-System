@@ -1,6 +1,11 @@
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
 const ACCESS_REQUESTS_KEY = 'law-office-document-access-requests';
 const portalData = window.CLIENT_PORTAL_DATA || {};
+const CLIENT_THEMES = [
+  { id: 'amber', name: 'Classic Amber', description: 'Warm gold accents', color: '#f59e0b' },
+  { id: 'ocean', name: 'Ocean Blue', description: 'Calm blue accents', color: '#38bdf8' },
+  { id: 'emerald', name: 'Emerald', description: 'Fresh green accents', color: '#34d399' },
+];
 
 function readDocumentAccessRequests() {
   const savedRequests = window.localStorage.getItem(ACCESS_REQUESTS_KEY);
@@ -17,6 +22,11 @@ function readDocumentAccessRequests() {
 function ClientPortal() {
   const currentView = 'dashboard';
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(portalData.appointmentNoticeType === 'error');
+  const [customizationOpen, setCustomizationOpen] = useState(false);
+  const [settingsPanelView, setSettingsPanelView] = useState('account-settings');
+  const [clientTheme, setClientTheme] = useState(document.documentElement.dataset.clientTheme || 'amber');
+  const [themeStorageError, setThemeStorageError] = useState(Boolean(window.CLIENT_PORTAL_THEME_STORAGE_ERROR));
+  const appearancePanelRef = useRef(null);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [documentRequestNotice, setDocumentRequestNotice] = useState('');
   const [documentAccessRequests, setDocumentAccessRequests] = useState(readDocumentAccessRequests);
@@ -39,7 +49,24 @@ function ClientPortal() {
     if (window.lucide) {
       window.lucide.createIcons();
     }
-  }, [isScheduleModalOpen, selectedDocument, documentAccessRequests]);
+  }, [isScheduleModalOpen, selectedDocument, documentAccessRequests, customizationOpen, settingsPanelView]);
+
+  useEffect(() => {
+    if (!customizationOpen) return undefined;
+    const closeAppearancePanel = (event) => {
+      if (event.key === 'Escape') {
+        setCustomizationOpen(false);
+      } else if (event.type === 'pointerdown' && !appearancePanelRef.current?.contains(event.target)) {
+        setCustomizationOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', closeAppearancePanel);
+    window.addEventListener('keydown', closeAppearancePanel);
+    return () => {
+      document.removeEventListener('pointerdown', closeAppearancePanel);
+      window.removeEventListener('keydown', closeAppearancePanel);
+    };
+  }, [customizationOpen]);
 
   useEffect(() => {
     const syncDocumentRequests = (event) => {
@@ -88,6 +115,22 @@ function ClientPortal() {
     } catch (error) {
       console.error('Unable to save the document access request.', error);
       setDocumentRequestNotice('Unable to send the request. Please check browser storage and try again.');
+    }
+  };
+
+  const selectClientTheme = (theme) => {
+    if (!CLIENT_THEMES.some((item) => item.id === theme)) {
+      console.error('Ignoring an unsupported Client portal theme.', theme);
+      return;
+    }
+    document.documentElement.dataset.clientTheme = theme;
+    setClientTheme(theme);
+    setThemeStorageError(false);
+    try {
+      window.localStorage.setItem(window.CLIENT_PORTAL_THEME_STORAGE_KEY, theme);
+    } catch (error) {
+      console.error('Unable to save the Client portal theme.', error);
+      setThemeStorageError(true);
     }
   };
 
@@ -280,6 +323,87 @@ function ClientPortal() {
           <div className="text-right hidden sm:block">
             <p className="text-sm font-semibold text-white">{clientProfile.fullname}</p>
             <p className="text-xs text-slate-400">{clientProfile.email}</p>
+          </div>
+          <div className="relative" ref={appearancePanelRef}>
+            <button
+              type="button"
+              onClick={() => setCustomizationOpen((open) => !open)}
+              aria-label="Open account settings and customization"
+              aria-expanded={customizationOpen}
+              aria-controls="client-appearance-panel"
+              className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 transition hover:border-amber-500/60 hover:text-white">
+              <i data-lucide="user-round-cog" className="h-4 w-4 text-amber-400"></i>
+              <span className="hidden sm:inline">Settings</span>
+            </button>
+            {customizationOpen && (
+              <section id="client-appearance-panel" role="dialog" aria-label="Account settings and customization" className="absolute right-0 top-full z-[60] mt-2 w-[min(22rem,90vw)] rounded-xl border border-slate-700 bg-slate-950 p-4 shadow-2xl">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-white">{settingsPanelView === 'account-settings' ? 'Account Settings' : 'Customization'}</h2>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {settingsPanelView === 'account-settings' ? 'Your account information.' : 'Choose your portal accent color.'}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setCustomizationOpen(false)} aria-label="Close appearance settings" className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white">
+                    <i data-lucide="x" className="h-4 w-4"></i>
+                  </button>
+                </div>
+                <div className="mb-4 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={settingsPanelView === 'account-settings'}
+                    onClick={() => setSettingsPanelView('account-settings')}
+                    className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${settingsPanelView === 'account-settings' ? 'bg-amber-500/15 text-amber-300' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                    Account Settings
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={settingsPanelView === 'customization'}
+                    onClick={() => setSettingsPanelView('customization')}
+                    className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${settingsPanelView === 'customization' ? 'bg-amber-500/15 text-amber-300' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                    Customization
+                  </button>
+                </div>
+                {settingsPanelView === 'account-settings' ? (
+                  <dl className="grid gap-2 sm:grid-cols-2">
+                    {[
+                      ['Name', clientProfile.fullname],
+                      ['Email', clientProfile.email],
+                      ['Phone', clientProfile.phone || 'Not provided'],
+                      ['Address', clientProfile.address || 'Not provided'],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                        <dt className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</dt>
+                        <dd className="mt-1 break-words text-xs font-medium text-white">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : (
+                  <div className="space-y-2">
+                    {CLIENT_THEMES.map((theme) => (
+                      <button
+                        key={theme.id}
+                        type="button"
+                        aria-pressed={clientTheme === theme.id}
+                        onClick={() => selectClientTheme(theme.id)}
+                        className={`flex w-full items-center justify-between gap-3 rounded-lg border border-slate-700 bg-slate-900/70 p-3 text-left transition hover:border-slate-500 ${clientTheme === theme.id ? 'client-theme-selected' : ''}`}>
+                        <span className="flex items-center gap-3">
+                          <span className="h-7 w-7 rounded-full border border-white/20" style={{ backgroundColor: theme.color }}></span>
+                          <span>
+                            <span className="block text-sm font-medium text-white">{theme.name}</span>
+                            <span className="mt-0.5 block text-xs text-slate-400">{theme.description}</span>
+                          </span>
+                        </span>
+                        {clientTheme === theme.id && <i data-lucide="check" className="h-4 w-4 shrink-0 text-amber-300"></i>}
+                      </button>
+                    ))}
+                    {themeStorageError && (
+                      <p role="status" className="mt-3 text-xs text-amber-200">The palette is active for this visit, but your browser couldn’t save it for your next visit.</p>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
           </div>
           <a
             href="logout.php"

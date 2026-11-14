@@ -224,19 +224,36 @@ if ($userRole === 'admin') {
     $usersList = $usersStatement->fetchAll();
 }
 ?>
-<html lang="en">
+<html lang="en" data-admin-theme="amber">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Law Office Management System - Admin & Attorney Portal</title>
 
+    <script>
+        window.ADMIN_THEME_STORAGE_KEY = <?php echo json_encode(
+            'admin-portal-theme:' . strtolower((string) $account['email']),
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR
+        ); ?>;
+        try {
+            const savedTheme = window.localStorage.getItem(window.ADMIN_THEME_STORAGE_KEY);
+            if (['amber', 'ocean', 'emerald'].includes(savedTheme)) {
+                document.documentElement.dataset.adminTheme = savedTheme;
+            }
+        } catch (error) {
+            window.ADMIN_THEME_STORAGE_ERROR = true;
+            console.error('Unable to read the saved Admin portal theme.', error);
+        }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <link rel="stylesheet" href="../CSS/styles.css">
+    <link rel="stylesheet" href="../CSS/style.css">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="../CSS/portal-themes.css">
 </head>
 <body class="bg-[#020617] text-slate-100 antialiased selection:bg-amber-500 selection:text-slate-950">
     <div id="root"></div>
@@ -260,6 +277,6 @@ if ($userRole === 'admin') {
         window.ADMIN_CLIENT_RECORDS = <?php echo json_encode($clientRecords, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
     </script>
     <script src="js/admin-storage.js"></script>
-    <script type="text/babel" src="js/admin-app.jsx?v=18"></script>
+    <script type="text/babel" src="js/admin-app.jsx?v=19"></script>
 </body>
 </html>

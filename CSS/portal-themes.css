@@ -1,0 +1,89 @@
+:is(html[data-admin-theme="amber"], html[data-staff-theme="amber"], html[data-client-theme="amber"]) {
+    --portal-accent-200: #fde68a;
+    --portal-accent-300: #fcd34d;
+    --portal-accent-400: #fbbf24;
+    --portal-accent-500: #f59e0b;
+    --portal-accent-600: #d97706;
+    --portal-accent-700: #b45309;
+}
+
+:is(html[data-admin-theme="ocean"], html[data-staff-theme="ocean"], html[data-client-theme="ocean"]) {
+    --portal-accent-200: #bae6fd;
+    --portal-accent-300: #7dd3fc;
+    --portal-accent-400: #38bdf8;
+    --portal-accent-500: #0ea5e9;
+    --portal-accent-600: #0284c7;
+    --portal-accent-700: #0369a1;
+}
+
+:is(html[data-admin-theme="emerald"], html[data-staff-theme="emerald"], html[data-client-theme="emerald"]) {
+    --portal-accent-200: #a7f3d0;
+    --portal-accent-300: #6ee7b7;
+    --portal-accent-400: #34d399;
+    --portal-accent-500: #10b981;
+    --portal-accent-600: #059669;
+    --portal-accent-700: #047857;
+}
+
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="text-amber-200"] { color: var(--portal-accent-200) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="text-amber-300"] { color: var(--portal-accent-300) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="text-amber-400"] { color: var(--portal-accent-400) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="text-amber-400/80"] { color: color-mix(in srgb, var(--portal-accent-400) 80%, transparent) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="text-amber-500"] { color: var(--portal-accent-500) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="text-amber-600"] { color: var(--portal-accent-600) !important; }
+
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="bg-amber-500"] { background-color: var(--portal-accent-500) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="bg-amber-600"] { background-color: var(--portal-accent-600) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="bg-amber-700"] { background-color: var(--portal-accent-700) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="bg-amber-500/5"] { background-color: color-mix(in srgb, var(--portal-accent-500) 5%, transparent) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="bg-amber-500/10"] { background-color: color-mix(in srgb, var(--portal-accent-500) 10%, transparent) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="bg-amber-500/15"] { background-color: color-mix(in srgb, var(--portal-accent-500) 15%, transparent) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="bg-amber-500/20"] { background-color: color-mix(in srgb, var(--portal-accent-500) 20%, transparent) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="bg-amber-500/30"] { background-color: color-mix(in srgb, var(--portal-accent-500) 30%, transparent) !important; }
+
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="border-amber-500"] { border-color: var(--portal-accent-500) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="border-amber-500/20"] { border-color: color-mix(in srgb, var(--portal-accent-500) 20%, transparent) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="border-amber-500/25"] { border-color: color-mix(in srgb, var(--portal-accent-500) 25%, transparent) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="border-amber-500/30"] { border-color: color-mix(in srgb, var(--portal-accent-500) 30%, transparent) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="border-amber-500/40"] { border-color: color-mix(in srgb, var(--portal-accent-500) 40%, transparent) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="border-amber-500/60"] { border-color: color-mix(in srgb, var(--portal-accent-500) 60%, transparent) !important; }
+
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="from-amber-500"] {
+    --tw-gradient-from: var(--portal-accent-500) var(--tw-gradient-from-position);
+    --tw-gradient-to: color-mix(in srgb, var(--portal-accent-500) 0%, transparent) var(--tw-gradient-to-position);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="from-amber-600"] {
+    --tw-gradient-from: var(--portal-accent-600) var(--tw-gradient-from-position);
+    --tw-gradient-to: color-mix(in srgb, var(--portal-accent-600) 0%, transparent) var(--tw-gradient-to-position);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="to-amber-500"] { --tw-gradient-to: var(--portal-accent-500) var(--tw-gradient-to-position); }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="to-amber-700"] { --tw-gradient-to: var(--portal-accent-700) var(--tw-gradient-to-position); }
+
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="hover:from-amber-500"]:hover {
+    --tw-gradient-from: var(--portal-accent-500) var(--tw-gradient-from-position);
+    --tw-gradient-to: color-mix(in srgb, var(--portal-accent-500) 0%, transparent) var(--tw-gradient-to-position);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="hover:to-amber-400"]:hover { --tw-gradient-to: var(--portal-accent-400) var(--tw-gradient-to-position); }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="hover:bg-amber-500"]:hover { background-color: var(--portal-accent-500) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="hover:bg-amber-400"]:hover { background-color: var(--portal-accent-400) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="hover:bg-amber-500/10"]:hover { background-color: color-mix(in srgb, var(--portal-accent-500) 10%, transparent) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="hover:bg-amber-500/20"]:hover { background-color: color-mix(in srgb, var(--portal-accent-500) 20%, transparent) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="hover:text-amber-200"]:hover { color: var(--portal-accent-200) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="hover:text-amber-400"]:hover { color: var(--portal-accent-400) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="hover:border-amber-500/40"]:hover { border-color: color-mix(in srgb, var(--portal-accent-500) 40%, transparent) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="hover:border-amber-500/60"]:hover { border-color: color-mix(in srgb, var(--portal-accent-500) 60%, transparent) !important; }
+
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="focus:border-amber-500"]:focus { border-color: var(--portal-accent-500) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="focus:ring-amber-400"]:focus { --tw-ring-color: var(--portal-accent-400) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="focus:ring-amber-500"]:focus { --tw-ring-color: var(--portal-accent-500) !important; }
+:is(html[data-admin-theme], html[data-staff-theme], html[data-client-theme]) [class~="accent-amber-500"] { accent-color: var(--portal-accent-500) !important; }
+
+.admin-theme-selected,
+.staff-theme-selected,
+.client-theme-selected {
+    border-color: var(--portal-accent-400) !important;
+    background-color: color-mix(in srgb, var(--portal-accent-500) 10%, transparent) !important;
+}

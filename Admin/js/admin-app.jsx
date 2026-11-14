@@ -1,12 +1,20 @@
 const { useState, useEffect, useRef } = React;
         const { DOCUMENT_REVIEW_KEY, APPOINTMENTS_KEY, NOTIFICATIONS_KEY, readNotifications, readAppointmentRecords, readDocumentSubmissions, getLocalDateString } = window.AdminPortalStorage;
 const currentUser = window.ADMIN_USER;
+        const ADMIN_THEMES = [
+          { id: 'amber', name: 'Classic Amber', description: 'Warm gold accents', color: '#f59e0b' },
+          { id: 'ocean', name: 'Ocean Blue', description: 'Calm blue accents', color: '#38bdf8' },
+          { id: 'emerald', name: 'Emerald', description: 'Fresh green accents', color: '#34d399' },
+        ];
 
         function AdminLawyerDashboard() {
           const [userRole, setUserRole] = useState(window.ADMIN_USER_ROLE === 'lawyer' ? 'lawyer' : 'admin');
           const requestedTab = new URLSearchParams(window.location.search).get('tab');
-          const [activeTab, setActiveTab] = useState(userRole === 'admin' ? 'overview' : requestedTab === 'schedule' || requestedTab === 'hours' ? requestedTab : 'cases');
+          const requestedAttorneyTab = ['schedule', 'hours', 'account-settings', 'customization'].includes(requestedTab) ? requestedTab : 'cases';
+          const [activeTab, setActiveTab] = useState(userRole === 'admin' ? 'overview' : requestedAttorneyTab);
           const [menuOpen, setMenuOpen] = useState(false);
+          const [adminTheme, setAdminTheme] = useState(document.documentElement.dataset.adminTheme || 'amber');
+          const [themeStorageError, setThemeStorageError] = useState(Boolean(window.ADMIN_THEME_STORAGE_ERROR));
           const [searchQuery, setSearchQuery] = useState('');
           const searchInputRef = useRef(null);
           const [reviewDocuments, setReviewDocuments] = useState(readDocumentSubmissions);
@@ -202,6 +210,22 @@ const currentUser = window.ADMIN_USER;
 
           const handleLogout = () => {
             window.location.href = 'logout.php';
+          };
+
+          const selectAdminTheme = (theme) => {
+            if (!ADMIN_THEMES.some((item) => item.id === theme)) {
+              console.error('Ignoring an unsupported Admin portal theme.', theme);
+              return;
+            }
+            document.documentElement.dataset.adminTheme = theme;
+            setAdminTheme(theme);
+            setThemeStorageError(false);
+            try {
+              window.localStorage.setItem(window.ADMIN_THEME_STORAGE_KEY, theme);
+            } catch (error) {
+              console.error('Unable to save the Admin portal theme.', error);
+              setThemeStorageError(true);
+            }
           };
 
           const addNotification = (notification) => {
@@ -550,6 +574,26 @@ const currentUser = window.ADMIN_USER;
                       <i data-lucide="file-check-2" className="h-5 w-5"></i>
                       <span>Review File</span>
                     </button>
+                    {userRole === 'lawyer' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(event) => { event.currentTarget.blur(); setActiveTab('account-settings'); setMenuOpen(false); }}
+                          aria-current={activeTab === 'account-settings' ? 'page' : undefined}
+                          className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm transition ${activeTab === 'account-settings' ? 'bg-amber-500/15 text-amber-300' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+                          <i data-lucide="settings" className="h-5 w-5"></i>
+                          <span>Account Settings</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => { event.currentTarget.blur(); setActiveTab('customization'); setMenuOpen(false); }}
+                          aria-current={activeTab === 'customization' ? 'page' : undefined}
+                          className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm transition ${activeTab === 'customization' ? 'bg-amber-500/15 text-amber-300' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+                          <i data-lucide="paintbrush" className="h-5 w-5"></i>
+                          <span>Customization</span>
+                        </button>
+                      </>
+                    )}
                   </nav>
 
                   <div className="border-t border-slate-800 p-3">
@@ -1275,6 +1319,72 @@ const currentUser = window.ADMIN_USER;
                         </tbody>
                       </table>
                     </div>
+                  </section>
+                )}
+
+                {userRole === 'lawyer' && activeTab === 'account-settings' && (
+                  <section className="overflow-hidden rounded-2xl border border-amber-500/20 bg-slate-900/80 shadow-xl animate-fade-in">
+                    <div className="border-b border-slate-800 p-6">
+                      <div className="flex items-center gap-3">
+                        <i data-lucide="settings" className="h-5 w-5 text-amber-400"></i>
+                        <div>
+                          <h3 className="text-xl font-semibold text-white">Account Settings</h3>
+                          <p className="mt-1 text-sm text-slate-400">Your account information. Contact an administrator to request changes.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <dl className="grid gap-4 p-6 sm:grid-cols-2">
+                      {[
+                        ['Username', currentUser.name],
+                        ['Role', currentUser.roleLabel],
+                        ['Email', currentUser.email],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                          <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</dt>
+                          <dd className="mt-2 break-words text-sm font-medium text-white">{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+                )}
+
+                {userRole === 'lawyer' && activeTab === 'customization' && (
+                  <section className="overflow-hidden rounded-2xl border border-amber-500/20 bg-slate-900/80 shadow-xl animate-fade-in">
+                    <div className="border-b border-slate-800 p-6">
+                      <div className="flex items-center gap-3">
+                        <i data-lucide="paintbrush" className="h-5 w-5 text-amber-400"></i>
+                        <div>
+                          <h3 className="text-xl font-semibold text-white">Customization</h3>
+                          <p className="mt-1 text-sm text-slate-400">Choose a dark-mode accent palette. Your selection is saved in this browser.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid gap-4 p-6 md:grid-cols-3" aria-label="Accent color palette">
+                      {ADMIN_THEMES.map((theme) => (
+                        <button
+                          key={theme.id}
+                          type="button"
+                          aria-pressed={adminTheme === theme.id}
+                          onClick={() => selectAdminTheme(theme.id)}
+                          className={`rounded-xl border border-slate-700 bg-slate-950/50 p-4 text-left transition hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400 ${adminTheme === theme.id ? 'admin-theme-selected' : ''}`}>
+                          <span className="flex items-center justify-between gap-3">
+                            <span className="flex items-center gap-3">
+                              <span className="h-8 w-8 rounded-full border border-white/20" style={{ backgroundColor: theme.color }}></span>
+                              <span>
+                                <span className="block text-sm font-semibold text-white">{theme.name}</span>
+                                <span className="mt-1 block text-xs text-slate-400">{theme.description}</span>
+                              </span>
+                            </span>
+                            {adminTheme === theme.id && <i data-lucide="check" className="h-4 w-4 shrink-0 text-amber-300"></i>}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {themeStorageError && (
+                      <p className="px-6 pb-6 text-sm text-amber-200" role="status">
+                        The palette is active for this visit, but your browser couldn’t save it for your next visit.
+                      </p>
+                    )}
                   </section>
                 )}
 

@@ -1,6 +1,7 @@
 <?php
 function staff_layout_start(string $title, array $user, string $activePage, string $success = '', string $error = '', string $headerAction = '', string $headerActionTarget = ''): void
 {
+    $themeStorageKey = 'staff-portal-theme:' . strtolower((string) $user['email']);
     $navigation = [
         'index.php'         => ['Dashboard', 'layout-dashboard'],
         'clients.php'       => ['Clients', 'users-round'],
@@ -10,16 +11,32 @@ function staff_layout_start(string $title, array $user, string $activePage, stri
         'documents.php'     => ['Documents', 'files'],
         'templates.php'     => ['Templates', 'file-text'],
     ];
+    $accountNavigation = [
+        'settings.php?view=account-settings' => ['Account Settings', 'settings'],
+        'settings.php?view=customization' => ['Customization', 'paintbrush'],
+    ];
     ?>
     <!DOCTYPE html>
-    <html lang="en">
+    <html lang="en" data-staff-theme="amber" data-theme-storage-key="<?php echo staff_h($themeStorageKey); ?>">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?php echo staff_h($title); ?> - Staff Portal</title>
+        <script>
+            try {
+                const savedTheme = window.localStorage.getItem(document.documentElement.dataset.themeStorageKey);
+                if (['amber', 'ocean', 'emerald'].includes(savedTheme)) {
+                    document.documentElement.dataset.staffTheme = savedTheme;
+                }
+            } catch (error) {
+                window.STAFF_THEME_STORAGE_ERROR = true;
+                console.error('Unable to read the saved Staff portal theme.', error);
+            }
+        </script>
         <script src="https://cdn.tailwindcss.com"></script>
         <script src="https://unpkg.com/lucide@latest"></script>
         <link rel="stylesheet" href="../CSS/staff-styles.css">
+        <link rel="stylesheet" href="../CSS/portal-themes.css">
         <style>
             html {
                 overflow-y: scroll;
@@ -62,14 +79,56 @@ function staff_layout_start(string $title, array $user, string $activePage, stri
                         </div>
                     </div>
                 </form>
-                <div class="flex items-center gap-4">
-                    <div class="hidden text-right sm:block">
-                        <p class="text-sm font-semibold text-white"><?php echo staff_h($user['username']); ?></p>
-                        <p class="text-xs text-slate-400"><?php echo staff_h($user['email']); ?></p>
+                <div class="relative shrink-0" id="staff-account-menu-container">
+                    <button
+                        type="button"
+                        id="staff-account-menu-toggle"
+                        aria-label="Open Staff account menu"
+                        aria-expanded="false"
+                        aria-controls="staff-account-menu"
+                        class="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-amber-500 text-amber-400 transition hover:bg-amber-500/10 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                        <i data-lucide="user-round" class="h-6 w-6"></i>
+                    </button>
+                    <div id="staff-account-menu" class="absolute right-0 top-full z-50 mt-3 hidden max-h-[calc(100vh-5rem)] w-[min(18rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+                        <div class="flex items-center gap-3 border-b border-slate-800 px-5 py-5">
+                            <span class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-amber-500/50 bg-amber-500/10 text-amber-400">
+                                <i data-lucide="user-round" class="h-6 w-6"></i>
+                            </span>
+                            <span class="min-w-0">
+                                <span class="block truncate text-sm font-semibold text-white"><?php echo staff_h($user['username']); ?></span>
+                                <span class="block text-xs font-medium text-amber-400"><?php echo staff_h(ucwords(str_replace(['_', '-'], ' ', (string) $user['role']))); ?></span>
+                                <span class="block truncate text-[11px] text-slate-400"><?php echo staff_h($user['email']); ?></span>
+                            </span>
+                        </div>
+                        <nav class="space-y-1 px-2 py-2" aria-label="Staff sections">
+                            <?php foreach ($navigation as $path => [$label, $icon]): ?>
+                                <a
+                                    href="<?php echo staff_h($path); ?>"
+                                    class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition <?php echo $activePage === $path ? 'bg-amber-500/15 text-amber-300' : 'text-slate-300 hover:bg-slate-800 hover:text-white'; ?>"
+                                    <?php echo $activePage === $path ? 'aria-current="page"' : ''; ?>>
+                                    <i data-lucide="<?php echo staff_h($icon); ?>" class="h-4 w-4 shrink-0"></i>
+                                    <span><?php echo staff_h($label); ?></span>
+                                </a>
+                            <?php endforeach; ?>
+                        </nav>
+                        <nav class="space-y-1 border-t border-slate-800 px-2 py-3" aria-label="Account settings">
+                            <?php foreach ($accountNavigation as $path => [$label, $icon]): ?>
+                                <a
+                                    href="<?php echo staff_h($path); ?>"
+                                    class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition <?php echo $activePage === $path ? 'bg-amber-500/15 text-amber-300' : 'text-slate-300 hover:bg-slate-800 hover:text-white'; ?>"
+                                    <?php echo $activePage === $path ? 'aria-current="page"' : ''; ?>>
+                                    <i data-lucide="<?php echo staff_h($icon); ?>" class="h-4 w-4 shrink-0"></i>
+                                    <span><?php echo staff_h($label); ?></span>
+                                </a>
+                            <?php endforeach; ?>
+                        </nav>
+                        <div class="border-t border-slate-800 p-2">
+                            <a href="logout.php" class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 hover:text-red-200">
+                                <i data-lucide="log-out" class="h-4 w-4"></i>
+                                <span>Log Out</span>
+                            </a>
+                        </div>
                     </div>
-                    <a href="logout.php" class="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 transition hover:border-red-500/50 hover:text-red-300">
-                        <i data-lucide="log-out" class="h-4 w-4"></i><span>Log out</span>
-                    </a>
                 </div>
             </div>
         </header>
@@ -121,6 +180,31 @@ function staff_layout_end(): void
         <script src="../JS/phone-input.js"></script>
         <script>
             if (window.lucide) window.lucide.createIcons();
+
+            (() => {
+                const container = document.getElementById('staff-account-menu-container');
+                const toggle = document.getElementById('staff-account-menu-toggle');
+                const menu = document.getElementById('staff-account-menu');
+                if (!container || !toggle || !menu) return;
+
+                const setOpen = (open) => {
+                    menu.classList.toggle('hidden', !open);
+                    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                };
+
+                toggle.addEventListener('click', () => {
+                    setOpen(toggle.getAttribute('aria-expanded') !== 'true');
+                });
+                document.addEventListener('pointerdown', (event) => {
+                    if (!container.contains(event.target)) setOpen(false);
+                });
+                window.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && toggle.getAttribute('aria-expanded') === 'true') {
+                        setOpen(false);
+                        toggle.focus();
+                    }
+                });
+            })();
 
             document.querySelectorAll('[data-dialog-toggle]').forEach((button) => {
                 button.addEventListener('click', () => {
